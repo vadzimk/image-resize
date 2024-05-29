@@ -10,7 +10,13 @@ def test_read_root():
     assert res.json() == {'Hello': 'World'}
 
 
-def test_create_new_project():
-    res = client.post("/projects", json={"filename": "testing.jpg"})
+def test_create_project_returns_upload_link():
+    filename = "testing.jpg"
+    res = client.post("/projects", json={"filename": filename})
     assert res.status_code == 200
-    assert res.json()["link"] == "http://example.com"
+    body = res.json()
+    assert body["link"] == "http://example.com"
+    assert body["filename"] == filename
+    print("type", type(body["id"]))
+    assert isinstance(body["id"], str) and len(body["id"]) > 0
+

@@ -9,4 +9,4 @@ minio.start:
 
 test.backend:
 	cd backend \
-	&& pytest
+	&& pytest -vv -s
