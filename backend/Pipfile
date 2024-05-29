@@ -9,6 +9,7 @@ uvicorn = "*"
 minio = "*"
 python-multipart = "*"
 pillow = "*"
+pytest = "*"
 
 [dev-packages]
 
