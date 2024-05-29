@@ -1,9 +1,23 @@
-# Solution project [Option_1](https://gist.github.com/scr1pt/29284cc45f2ebb3978529c69115741be)  
+# Image resize app  
+[Option 1](https://gist.github.com/scr1pt/29284cc45f2ebb3978529c69115741be)  
+The app takes an image upload,
+does resizing in four particular formats  
+outputs processed images for download.
+Basic UI for the app.
+
+![img.png](img.png)
+
+Processed image sizes:
+- Original
+- thumb: 150x120, to_fit
+- big_thumb: 700x700, to_fit
+- big_1920, 1920x1080, to_fit
+- d2500: 2500x2500, to_fit
 
 <details>
+<summary>Requirements document</summary>
 
-<summary>Вариант 1 - загрузка и обработка фоток</summary>
-
+## Вариант 1 - загрузка и обработка фоток
 >Разработать api-интерфейс для высоконагруженной загрузки изображений.
 
 Описание:
