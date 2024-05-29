@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter
 from starlette import status
 
-from schemas import ProjectCreate, ProjectBase
+from .schemas import ProjectCreate, ProjectBase
 
 router = APIRouter()
 

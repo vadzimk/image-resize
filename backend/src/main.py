@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from minio import Minio
 
-from api import router
+from .api import router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

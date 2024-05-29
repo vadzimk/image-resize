@@ -6,4 +6,7 @@ minio.start:
 	&& source .env \
 	&& set +o allexport \
 	&& docker-compose up -d
-#	&& echo $$MINIO_ROOT_USER
+
+test.backend:
+	cd backend \
+	&& pytest
