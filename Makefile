@@ -7,6 +7,10 @@ minio.start:
 	&& set +o allexport \
 	&& docker-compose up -d
 
-test.backend:
+backend.test:
 	cd backend \
 	&& pytest -vv -s
+
+backend.start:
+	cd backend \
+	&& uvicorn src.main:app --reload

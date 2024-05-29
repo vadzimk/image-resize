@@ -1,4 +1,7 @@
+import os
+
 from fastapi.testclient import TestClient
+
 from ..src.main import app
 
 client = TestClient(app)
@@ -20,3 +23,14 @@ def test_create_project_returns_upload_link():
     print("type", type(body["id"]))
     assert isinstance(body["id"], str) and len(body["id"]) > 0
 
+
+def test_upload_file_returns_filename():
+    image_file_path = "../img.png"
+    print()
+    print(os.getcwd())
+    # assert True
+    with open(image_file_path, "rb") as image_file:
+        files = {"file": ("img.png", image_file, "image/png")}
+        res = client.post("/uploadfile", files=files)
+        print(res.json())
+        assert res.status_code == 200

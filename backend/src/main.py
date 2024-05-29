@@ -1,6 +1,6 @@
 import logging
 import os
-import uvicorn
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from minio import Minio
@@ -26,5 +26,4 @@ logger.info(f"Minio: {'connected' if isinstance(client.list_buckets(), list) els
 app = FastAPI()
 app.include_router(router)
 
-if __name__ == "__main__":
-    uvicorn.run(f"{__name__}:app", reload=True)
+

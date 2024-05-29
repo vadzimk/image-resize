@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile
 from starlette import status
 
 from .schemas import ProjectCreate, ProjectBase
@@ -18,3 +18,7 @@ def create_project(project_base: ProjectBase):
     link_original = "http://example.com"
     res = ProjectCreate(id=uuid.uuid4(), filename=project_base.filename, link=link_original)
     return res
+
+@router.post("/uploadfile")
+async def create_upload_file(file: UploadFile):
+    return {"filename": file.filename}
