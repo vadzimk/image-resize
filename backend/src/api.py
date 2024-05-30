@@ -51,6 +51,7 @@ def create_upload_file(file: UploadFile):
             "big_1920": (1920, 1080),
             "d2500": (2500, 2500)
         }
+        versions = {"original": object_name_original}
         with tempfile.TemporaryDirectory() as temp_dir:
             for size_key, size_value in sizes.items():
                 destination_name = f"{input_file_name_less}_{size_key}.{ext}"
@@ -58,16 +59,11 @@ def create_upload_file(file: UploadFile):
                 resize_with_aspect_ratio(temp_input_file, destination_temp_path, size_value)  # must use temporary file
                 object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
                 s3.fput_object("images", object_name=object_name, file_path=destination_temp_path)
+                versions[size_key] = object_name
         # will close temp_input_file
 
         return {
             "project_id": project_id,
             "state": "init",
-            "versions": {
-                "original": "",
-                "thumb_150x120": "",
-                "big_thumb_700x700": "",
-                "big_1920x1080": "",
-                "d2500_2500x2500": ""
-            },
+            "versions": versions
         }

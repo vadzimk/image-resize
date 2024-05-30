@@ -12,12 +12,13 @@ def timethis(func):
         r = func(*args, **kwargs)
         end = time.time()
         elapsed = end - start
-        print(end - start)
         hours = int(elapsed // 3600)
         minutes = int((elapsed % 3600) // 60)
         seconds = int(elapsed % 60)
         milliseconds = int((elapsed - int(elapsed)) * 1000)
-        logger.info(f"{func.__name__}-->{hours}h:{minutes}m:{seconds}s:{milliseconds}ms")
+        message = f"{func.__name__}-->{hours}h:{minutes}m:{seconds}s:{milliseconds}ms"
+        print(message)
+        logger.info(message)
         return r
 
     return wrapper
