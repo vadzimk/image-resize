@@ -8,7 +8,7 @@ from starlette import status
 
 from .schemas import ProjectCreate, ProjectBase, Project
 from .services.minio import s3
-from .services.resizer import resize_with_aspect_ratio
+from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis
 
 router = APIRouter()
