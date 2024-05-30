@@ -1,6 +1,5 @@
-from typing import Tuple
-
 from PIL import Image
+from typing import Tuple
 
 
 def resize_with_aspect_ratio(image_path: str, output_path: str, size: Tuple[int, int]):
@@ -14,6 +13,3 @@ def resize_with_aspect_ratio(image_path: str, output_path: str, size: Tuple[int,
         # Preserve aspect ratio
         img.thumbnail(size)
         img.save(output_path)
-
-
-resize_with_aspect_ratio('input_image.jpg', 'output_image.jpg', (150, 120))

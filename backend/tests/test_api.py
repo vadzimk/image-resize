@@ -25,12 +25,13 @@ def test_create_project_returns_upload_link():
 
 
 def test_upload_file_returns_filename():
-    image_file_path = "../img.png"
+    image_file_path = "./tests/photo.jpeg"
     print()
     print(os.getcwd())
-    # assert True
+    assert os.path.exists(image_file_path)
     with open(image_file_path, "rb") as image_file:
-        files = {"file": ("img.png", image_file, "image/png")}
+        files = {"file": (os.path.basename(image_file_path), image_file, "image/jpeg")}
         res = client.post("/uploadfile", files=files)
         print(res.json())
-        assert res.status_code == 200
+        assert res.status_code == 201
+
