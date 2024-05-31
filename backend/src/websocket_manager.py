@@ -8,6 +8,7 @@ from .exceptions import AlreadySubscribed
 logger = logging.getLogger(__name__)
 
 
+
 class WebsocketManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
