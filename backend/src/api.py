@@ -1,3 +1,4 @@
+import logging
 import os.path
 import shutil
 import tempfile
@@ -5,13 +6,16 @@ import uuid
 
 from fastapi import APIRouter, UploadFile
 from starlette import status
+from starlette.websockets import WebSocket
 
+from .websocket_manager import ws_manager
 from .schemas import ProjectCreate, ProjectBase, Project
 from .services.minio import s3
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get('/', status_code=status.HTTP_200_OK)
@@ -67,3 +71,18 @@ def create_upload_file(file: UploadFile):
             "state": "init",
             "versions": versions
         }
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    logger.info("Client connected")
+    try:
+        while True:
+            data = await websocket.receive_json()
+            logger.info(f"Client message {data}")
+            await ws_manager.broadcast({"Message text": data})
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        ws_manager.disconnect(websocket)
