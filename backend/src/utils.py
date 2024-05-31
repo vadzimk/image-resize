@@ -18,7 +18,8 @@ def timethis(func):
         milliseconds = int((elapsed - int(elapsed)) * 1000)
         message = f"{func.__name__}-->{hours}h:{minutes}m:{seconds}s:{milliseconds}ms"
         print(message)
-        logger.info(message)
+        logger.debug(message)
         return r
 
     return wrapper
+

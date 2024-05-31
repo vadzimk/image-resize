@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "f4aeb77db847396a863614c3b6e852dc6c9091b846f3556f6218500d012042a1"
+            "sha256": "16f8000ee7a26639c19f8cb673bc395bc3bf173fd51048d5ee97008036545b6c"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -661,6 +661,15 @@
             "markers": "python_version >= '3.8'",
             "version": "==8.2.1"
         },
+        "pytest-asyncio": {
+            "hashes": [
+                "sha256:009b48127fbe44518a547bddd25611551b0e43ccdbf1e67d12479f569832c20b",
+                "sha256:5f5c72948f4c49e7db4f29f2521d4031f1c27f86e57b046126654083d4770268"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.8'",
+            "version": "==0.23.7"
+        },
         "python-dotenv": {
             "hashes": [
                 "sha256:e324ee90a023d808f1959c46bcbc04446a10ced277783dc6ee09987c37ec10ca",
@@ -786,7 +795,7 @@
                 "sha256:8cbcdc8606ebcb0d95453ad7dc5065e6237b6aa230a31e81d0f440c30fed5fd8",
                 "sha256:b349c66bea9016ac22978d800cfff206d5f9816951f12a7d0ec5578b0a819594"
             ],
-            "markers": "python_version < '3.11'",
+            "markers": "python_version >= '3.8'",
             "version": "==4.12.0"
         },
         "ujson": {

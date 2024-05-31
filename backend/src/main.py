@@ -11,11 +11,11 @@ from .websocket_manager import ws_manager
 from .api import router
 from .services.minio import s3
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-logger.info("Logger connected")
+logger.debug("Logger connected")
 
-logger.info(f"Minio: {'connected' if s3.bucket_exists('images') else 'NOT connected'}")
+logger.debug(f"Minio: {'connected' if s3.bucket_exists('images') else 'NOT connected'}")
 
 executor = ThreadPoolExecutor(max_workers=1)
 
@@ -36,13 +36,15 @@ app.include_router(router)
 
 def listen_to_s3_events(loop: AbstractEventLoop):
     async def publish_event(message: dict):
-        await ws_manager.broadcast(message)
+        # await ws_manager.broadcast(message)  # TODO send to all connections  (for testing when not subscribed)
+        await ws_manager.publish(message)
 
     try:
         with s3.listen_bucket_notification("images", events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]) as events:
             for event in events:
-                logger.info(event)
-                asyncio.run_coroutine_threadsafe(publish_event(event), loop=loop)
+                for record in event.get("Records", []):
+                    logger.debug(f'{record["eventName"]}: {record["s3"]["object"]["key"]}')
+                asyncio.run_coroutine_threadsafe(publish_event(event), loop=loop)  # publish to ws_manager
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
 

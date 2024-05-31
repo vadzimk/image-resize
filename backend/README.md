@@ -262,7 +262,7 @@ def listen_to_s3_events(loop):
     try:
         with listen_bucket_notification("images", events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]) as events:
             for event in events:
-                logger.info(event)
+                logger.debug(event)
                 asyncio.run_coroutine_threadsafe(publish_event(f"S3 Event: {event}"), loop)
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
@@ -294,3 +294,387 @@ Next Steps
 
 a. Add authentication to the WebSocket connections to secure the communication.
 b. Implement unit tests for the WebSocket manager and S3 event handling logic.
+
+
+## To subscribe a web client to receive messages from a WebSocket endpoint about events from S3, you need to:
+
+    Set up the WebSocket endpoint in FastAPI: Create an endpoint where clients can connect via WebSocket.
+    Send messages to connected WebSocket clients when an S3 event occurs: Modify the listen_to_s3_events function to send relevant messages to connected clients.
+
+Here's the complete code with the necessary changes:
+WebSocket Endpoint
+
+Add a WebSocket endpoint to your FastAPI app:
+
+```python
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.routing import APIRouter
+from starlette.websockets import WebSocket
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from contextlib import asynccontextmanager
+import json
+import logging
+from s3 import listen_bucket_notification, S3Error  # Assuming you have an s3 module
+
+logger = logging.getLogger(__name__)
+
+class WebsocketManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: Any):
+        for conn in self.active_connections:
+            await conn.send_text(json.dumps(message))
+
+ws_manager = WebsocketManager()
+executor = ThreadPoolExecutor(max_workers=1)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop = asyncio.get_event_loop()
+    executor.submit(listen_to_s3_events, loop)
+    yield
+    executor.shutdown(wait=False)
+
+app = FastAPI(lifespan=lifespan)
+router = APIRouter()
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Process incoming message if necessary
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+
+app.include_router(router)
+
+def listen_to_s3_events(loop: asyncio.AbstractEventLoop):
+    async def publish_event(message: dict):
+        await ws_manager.broadcast(message)
+
+    try:
+        with listen_bucket_notification("images", events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]) as events:
+            for event in events:
+                if event["EventName"].startswith("ObjectCreated"):
+                    logger.debug(event)
+                    asyncio.run_coroutine_threadsafe(publish_event(event), loop=loop)
+    except S3Error as err:
+        logger.error(f"S3 Error: {err}")
+```
+Client-Side Code
+
+To receive messages from the WebSocket endpoint on the client side, you can use JavaScript:
+
+```javascript
+
+const websocket = new WebSocket("ws://yourserveraddress/ws");
+
+websocket.onopen = function(event) {
+    console.log("Connected to the WebSocket server.");
+};
+
+websocket.onmessage = function(event) {
+    const message = JSON.parse(event.data);
+    console.log("Received a message from the server:", message);
+    // Process the received S3 event message
+};
+
+websocket.onclose = function(event) {
+    console.log("Disconnected from the WebSocket server.");
+};
+
+websocket.onerror = function(event) {
+    console.error("WebSocket error observed:", event);
+};
+```
+Explanation
+
+    WebSocket Endpoint:
+        A WebSocket endpoint /ws is added to handle WebSocket connections.
+        ws_manager.connect adds the WebSocket connection to the list of active connections.
+        ws_manager.disconnect removes the WebSocket connection from the list when the client disconnects.
+
+    Broadcasting Messages:
+        The broadcast method in WebsocketManager sends a JSON-encoded message to all active WebSocket connections.
+
+    Listening to S3 Events:
+        The listen_to_s3_events function listens for S3 events and, when an ObjectCreated event occurs, it publishes the event to connected WebSocket clients.
+
+    Client-Side Code:
+        The JavaScript code establishes a WebSocket connection to the /ws endpoint.
+        It handles incoming messages, logging them to the console (or processing them as needed).
+
+This setup ensures that when an ObjectCreated event occurs in the S3 bucket, connected web clients receive a message with the event payload.
+
+
+## To filter the S3 events on the server side and only send messages to WebSocket clients when the object.key starts with a specific prefix (e.g., 38104499-c25e-4e30-8e24-fa6c6620aeb5), you can implement a subscription mechanism where clients specify the prefix they are interested in when they connect.
+
+Here's how to modify the code to include this feature:
+Server-Side Code
+
+Update the WebsocketManager to handle subscriptions based on object key prefixes:
+
+```python
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.routing import APIRouter
+from starlette.websockets import WebSocket
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from contextlib import asynccontextmanager
+import json
+import logging
+from s3 import listen_bucket_notification, S3Error  # Assuming you have an s3 module
+from typing import List, Dict
+
+logger = logging.getLogger(__name__)
+
+class WebsocketManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.subscriptions: Dict[WebSocket, str] = {}
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        if websocket in self.subscriptions:
+            del self.subscriptions[websocket]
+
+    async def broadcast(self, message: dict):
+        for conn, prefix in self.subscriptions.items():
+            if message['object']['key'].startswith(prefix):
+                await conn.send_text(json.dumps(message))
+
+    def subscribe(self, websocket: WebSocket, prefix: str):
+        self.subscriptions[websocket] = prefix
+
+ws_manager = WebsocketManager()
+executor = ThreadPoolExecutor(max_workers=1)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop = asyncio.get_event_loop()
+    executor.submit(listen_to_s3_events, loop)
+    yield
+    executor.shutdown(wait=False)
+
+app = FastAPI(lifespan=lifespan)
+router = APIRouter()
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            if "subscribe" in message:
+                ws_manager.subscribe(websocket, message["subscribe"])
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+
+app.include_router(router)
+
+def listen_to_s3_events(loop: asyncio.AbstractEventLoop):
+    async def publish_event(message: dict):
+        await ws_manager.broadcast(message)
+
+    try:
+        with listen_bucket_notification("images", events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]) as events:
+            for event in events:
+                if event["EventName"].startswith("ObjectCreated"):
+                    logger.debug(event)
+                    asyncio.run_coroutine_threadsafe(publish_event(event), loop=loop)
+    except S3Error as err:
+        logger.error(f"S3 Error: {err}")
+```
+Client-Side Code
+
+Update the client-side code to send a subscription message when connecting:
+
+```javascript
+
+const websocket = new WebSocket("ws://yourserveraddress/ws");
+
+websocket.onopen = function(event) {
+    console.log("Connected to the WebSocket server.");
+    // Send a subscription message with the prefix
+    websocket.send(JSON.stringify({ subscribe: "38104499-c25e-4e30-8e24-fa6c6620aeb5" }));
+};
+
+websocket.onmessage = function(event) {
+    const message = JSON.parse(event.data);
+    console.log("Received a message from the server:", message);
+    // Process the received S3 event message
+};
+
+websocket.onclose = function(event) {
+    console.log("Disconnected from the WebSocket server.");
+};
+
+websocket.onerror = function(event) {
+    console.error("WebSocket error observed:", event);
+};
+```
+Explanation
+
+    Server-Side Code:
+        WebsocketManager:
+            subscriptions: A dictionary mapping each WebSocket connection to its subscribed prefix.
+            broadcast: Modified to check the prefix before sending the message to each client.
+            subscribe: Method to add a subscription for a specific WebSocket connection.
+        WebSocket Endpoint:
+            Listens for a subscription message from the client and registers the subscription using the subscribe method of WebsocketManager.
+        listen_to_s3_events:
+            Unchanged, but now the broadcast method will filter events based on the subscription prefixes.
+
+    Client-Side Code:
+        Sends a subscription message immediately after the WebSocket connection is established, specifying the prefix it is interested in.
+
+This setup ensures that clients only receive messages for S3 events where the object.key starts with the specified prefix.
+
+
+## To allow each WebSocket client to subscribe to multiple prefixes, you can modify the subscriptions dictionary to map each WebSocket connection to a list of prefixes. Here's how you can adjust the code to support multiple prefix subscriptions for each client:
+Server-Side Code
+
+Update the WebsocketManager class and WebSocket endpoint to handle multiple subscriptions per client:
+
+```python
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.routing import APIRouter
+from starlette.websockets import WebSocket
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from contextlib import asynccontextmanager
+import json
+import logging
+from s3 import listen_bucket_notification, S3Error  # Assuming you have an s3 module
+from typing import List, Dict
+
+logger = logging.getLogger(__name__)
+
+class WebsocketManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.subscriptions: Dict[WebSocket, List[str]] = {}
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        self.subscriptions[websocket] = []
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        if websocket in self.subscriptions:
+            del self.subscriptions[websocket]
+
+    async def broadcast(self, message: dict):
+        for conn, prefixes in self.subscriptions.items():
+            for prefix in prefixes:
+                if message['object']['key'].startswith(prefix):
+                    await conn.send_text(json.dumps(message))
+                    break  # No need to check other prefixes if one matches
+
+    def subscribe(self, websocket: WebSocket, prefix: str):
+        if websocket in self.subscriptions:
+            self.subscriptions[websocket].append(prefix)
+
+ws_manager = WebsocketManager()
+executor = ThreadPoolExecutor(max_workers=1)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop = asyncio.get_event_loop()
+    executor.submit(listen_to_s3_events, loop)
+    yield
+    executor.shutdown(wait=False)
+
+app = FastAPI(lifespan=lifespan)
+router = APIRouter()
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            if "subscribe" in message:
+                ws_manager.subscribe(websocket, message["subscribe"])
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+
+app.include_router(router)
+
+def listen_to_s3_events(loop: asyncio.AbstractEventLoop):
+    async def publish_event(message: dict):
+        await ws_manager.broadcast(message)
+
+    try:
+        with listen_bucket_notification("images", events=["s3:ObjectCreated:*", "s3:ObjectRemoved:*"]) as events:
+            for event in events:
+                if event["EventName"].startswith("ObjectCreated"):
+                    logger.debug(event)
+                    asyncio.run_coroutine_threadsafe(publish_event(event), loop=loop)
+    except S3Error as err:
+        logger.error(f"S3 Error: {err}")
+```
+Client-Side Code
+
+Update the client-side code to send multiple subscription messages if needed:
+
+```javascript
+
+const websocket = new WebSocket("ws://yourserveraddress/ws");
+
+websocket.onopen = function(event) {
+    console.log("Connected to the WebSocket server.");
+    // Send subscription messages with the prefixes
+    websocket.send(JSON.stringify({ subscribe: "38104499-c25e-4e30-8e24-fa6c6620aeb5" }));
+    websocket.send(JSON.stringify({ subscribe: "another-prefix" }));
+};
+
+websocket.onmessage = function(event) {
+    const message = JSON.parse(event.data);
+    console.log("Received a message from the server:", message);
+    // Process the received S3 event message
+};
+
+websocket.onclose = function(event) {
+    console.log("Disconnected from the WebSocket server.");
+};
+
+websocket.onerror = function(event) {
+    console.error("WebSocket error observed:", event);
+};
+```
+Explanation
+
+    Server-Side Code:
+        WebsocketManager:
+            subscriptions: A dictionary mapping each WebSocket connection to a list of prefixes.
+            broadcast: Checks if any prefix in the list matches the event's object.key.
+            subscribe: Adds a prefix to the list of prefixes for the specified WebSocket connection.
+        WebSocket Endpoint:
+            Allows clients to send multiple subscription messages, each adding a prefix to their subscription list.
+
+    Client-Side Code:
+        Sends multiple subscription messages after establishing the WebSocket connection, subscribing to multiple prefixes.
+
+This setup allows each client to subscribe to multiple prefixes and receive messages for any of the specified prefixes.

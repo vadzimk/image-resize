@@ -10,6 +10,7 @@ minio = "*"
 python-multipart = "*"
 pillow = "*"
 pytest = "*"
+pytest-asyncio = "*"
 
 [dev-packages]
 

@@ -1,13 +1,15 @@
+import json
 import logging
 import os.path
 import shutil
 import tempfile
 import uuid
 
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, UploadFile, HTTPException
 from starlette import status
 from starlette.websockets import WebSocket
 
+from .exceptions import AlreadySubscribed
 from .websocket_manager import ws_manager
 from .schemas import ProjectCreate, ProjectBase, Project
 from .services.minio import s3
@@ -76,12 +78,22 @@ def create_upload_file(file: UploadFile):
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
-    logger.info("Client connected")
+    logger.debug("Client connected")
     try:
         while True:
-            data = await websocket.receive_json()
-            logger.info(f"Client message {data}")
-            await ws_manager.broadcast({"Message text": data})
+            data = await websocket.receive_text()
+            logger.debug(f"Path/ws Client message {data}")
+            message: dict = json.loads(data)  # TODO add schema validation
+            if "subscribe" in message:
+                try:
+                    ws_manager.subscribe(websocket, message["subscribe"])
+                    message.update({"status_code": "200", "status": "OK"})
+                except AlreadySubscribed:
+                    pass
+                finally:
+                    await websocket.send_json(message)  # TODO uncomment to send subscription confirmation to the client
+                    # pass
+            # await ws_manager.broadcast({"Message text": data})  # TODO remove, was for testing when no subscription
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
