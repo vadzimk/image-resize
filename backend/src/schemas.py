@@ -1,5 +1,4 @@
 import uuid
-from enum import Enum
 from typing import Dict
 
 from pydantic import BaseModel
@@ -10,8 +9,8 @@ class ProjectBase(BaseModel):  # TODO delete, not used in real endpoints
 
 
 class ProjectCreate(ProjectBase):  # TODO delete, not used in real endpoints
-    id: uuid.UUID
-    link: str
+    project_id: uuid.UUID
+    upload_link: str
 
 
 class Project(BaseModel):
@@ -19,8 +18,3 @@ class Project(BaseModel):
     state: str  # TODO replace with celery states
     versions: Dict[str, str]
 
-class NewImagePresignedUrlRequest(BaseModel):
-    filename: str
-
-class NewImagePresignedUrlResponse(NewImagePresignedUrlRequest):
-    upload_link: str

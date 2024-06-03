@@ -13,9 +13,7 @@ from .exceptions import AlreadySubscribed
 from .websocket_manager import ws_manager
 from .schemas import (ProjectCreate,
                       ProjectBase,
-                      Project,
-                      NewImagePresignedUrlRequest,
-                      NewImagePresignedUrlResponse)
+                      Project)
 from .services.minio import s3, get_presigned_url_put
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis
@@ -32,7 +30,7 @@ def index():
 @router.post('/projects', response_model=ProjectCreate, status_code=status.HTTP_200_OK)
 def create_project(project_base: ProjectBase):
     link_original = "http://example.com"
-    res = ProjectCreate(id=uuid.uuid4(), filename=project_base.filename, link=link_original)
+    res = ProjectCreate(project_id=uuid.uuid4(), filename=project_base.filename, upload_link=link_original)
     return res
 
 
@@ -79,15 +77,17 @@ def create_upload_file(file: UploadFile):
         }
 
 
-@router.post("/images", response_model=NewImagePresignedUrlResponse)
-def get_new_image_url(body: NewImagePresignedUrlRequest):
+@router.post("/images", response_model=ProjectCreate)
+def get_new_image_url(project_base: ProjectBase):
     project_id = str(uuid.uuid4())
-    input_file_name_less, ext = body.filename.rsplit('.', 1)
+    input_file_name_less, ext = project_base.filename.rsplit('.', 1)
     object_name_original = f"{project_id}/{input_file_name_less}_original.{ext}"
     url = get_presigned_url_put(object_name_original)
-    res_dict = body.model_dump()
-    res_dict.update({"upload_link": url})
-    return res_dict
+    return {
+        "filename": project_base.filename,
+        "project_id": project_id,
+        "upload_link": url
+    }
 
 
 @router.websocket("/ws")

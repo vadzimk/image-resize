@@ -29,10 +29,10 @@ def test_create_project_returns_upload_link():
     res = client.post("/projects", json={"filename": filename})
     assert res.status_code == 200
     body = res.json()
-    assert body["link"] == "http://example.com"
+    assert body["upload_link"] == "http://example.com"
     assert body["filename"] == filename
-    print("type", type(body["id"]))
-    assert isinstance(body["id"], str) and len(body["id"]) > 0
+    print("type", type(body["project_id"]))
+    assert isinstance(body["project_id"], str) and len(body["project_id"]) > 0
 
 
 def upload_file(image_file_path):
