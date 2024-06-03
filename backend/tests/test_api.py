@@ -1,7 +1,9 @@
 import asyncio
 import json
 import os
+import re
 from pprint import pprint
+from typing import List
 
 import httpx
 import pytest
@@ -15,6 +17,7 @@ from ..src.schemas import Project
 from ..src.main import app
 
 client = TestClient(app)
+
 
 # @pytest.mark.skip
 def test_read_root():
@@ -42,12 +45,16 @@ def upload_file(image_file_path):
         return res
 
 
-def cleanup_after_upload_file(res):
-    objects = res.json().get("versions").values()
+def cleanup_after_upload_file(objects: List[str]):
+    """
+    deletes s3 objects form minio storage
+    :param objects: list of str of format "e4302caa-dbd7-4743-ba09-241bd48e35f3/photo_original.jpeg"
+    """
     errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
     if len(list(errors)) != 0:
         raise AssertionError
     print(f"Cleanup cleanup_after_upload_file. Done. Deleted {len(objects)} objects.")
+
 
 # @pytest.mark.skip
 def test_upload_file_returns_Project():
@@ -59,7 +66,7 @@ def test_upload_file_returns_Project():
     assert res.status_code == 201
     project_response = Project.model_validate_json(res.text)
     assert project_response.project_id is not None
-    cleanup_after_upload_file(res)
+    cleanup_after_upload_file(res.json().get("versions").values())
     # objects = project_response.versions.values()
     # # cleanup
     # errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
@@ -75,7 +82,7 @@ async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_usin
 
     async def trigger_event():
         await asyncio.sleep(2)
-        cleanup_after_upload_file(res)
+        cleanup_after_upload_file(res.json().get("versions").values())
 
     asyncio.create_task(trigger_event())
 
@@ -169,11 +176,17 @@ def test_can_get_new_image_url_and_put_file():
     filename = os.path.basename(image_file_path)
     res = client.post("/images", json={"filename": filename})
     body = res.json()
-    print("upload_link: ", body['upload_link'])
+    upload_link = body.get('upload_link')
+    print("upload_link: ", upload_link)
     assert body['filename'] == filename
-    assert body['upload_link'].startswith('http')
+    assert upload_link.startswith('http')
 
     with open(image_file_path, 'rb') as file:
-        response = httpx.put(body['upload_link'], content=file, headers={'Content-Type': 'application/json'})
+        response = httpx.put(upload_link, content=file, headers={'Content-Type': 'application/json'})
     print('response_text', response.text)
     assert response.status_code == 200
+    bucket_name = "images"
+    pattern = fr'/{bucket_name}/([^?]+)'
+    match = re.search(pattern, upload_link).group(1)
+    print('match', match)
+    cleanup_after_upload_file([match])
