@@ -18,3 +18,9 @@ class Project(BaseModel):
     project_id: uuid.UUID
     state: str  # TODO replace with celery states
     versions: Dict[str, str]
+
+class NewImagePresignedUrlRequest(BaseModel):
+    filename: str
+
+class NewImagePresignedUrlResponse(NewImagePresignedUrlRequest):
+    upload_link: str

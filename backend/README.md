@@ -678,3 +678,13 @@ Explanation
         Sends multiple subscription messages after establishing the WebSocket connection, subscribing to multiple prefixes.
 
 This setup allows each client to subscribe to multiple prefixes and receive messages for any of the specified prefixes.
+
+
+# Next steps
+- replace image upload endpoint with presigned url from s3 storage
+  - return
+    - project_id
+    - pre-signed url
+- the client calls websocket endpoint to subscribe to the events about the project_id
+- client uses pre-signed url for the file upload
+- websocket endpoint informs about project status

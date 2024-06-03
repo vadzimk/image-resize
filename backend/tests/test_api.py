@@ -3,6 +3,7 @@ import json
 import os
 from pprint import pprint
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from minio.deleteobjects import DeleteObject
@@ -15,14 +16,14 @@ from ..src.main import app
 
 client = TestClient(app)
 
-
+# @pytest.mark.skip
 def test_read_root():
     res = client.get("/")
     assert res.status_code == 200
     assert res.json() == {'Hello': 'World'}
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_create_project_returns_upload_link():
     filename = "testing.jpg"
     res = client.post("/projects", json={"filename": filename})
@@ -48,8 +49,7 @@ def cleanup_after_upload_file(res):
         raise AssertionError
     print(f"Cleanup cleanup_after_upload_file. Done. Deleted {len(objects)} objects.")
 
-
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_upload_file_returns_Project():
     image_file_path = "./tests/photo.jpeg"
     assert os.path.exists(image_file_path)
@@ -161,3 +161,19 @@ async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_usin
         message = json.loads(response)
         pprint(message)
         assert True
+
+
+def test_can_get_new_image_url_and_put_file():
+    image_file_path = "./tests/photo.jpeg"
+    assert os.path.exists(image_file_path)
+    filename = os.path.basename(image_file_path)
+    res = client.post("/images", json={"filename": filename})
+    body = res.json()
+    print("upload_link: ", body['upload_link'])
+    assert body['filename'] == filename
+    assert body['upload_link'].startswith('http')
+
+    with open(image_file_path, 'rb') as file:
+        response = httpx.put(body['upload_link'], content=file, headers={'Content-Type': 'application/json'})
+    print('response_text', response.text)
+    assert response.status_code == 200

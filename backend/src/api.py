@@ -11,8 +11,12 @@ from starlette.websockets import WebSocket
 
 from .exceptions import AlreadySubscribed
 from .websocket_manager import ws_manager
-from .schemas import ProjectCreate, ProjectBase, Project
-from .services.minio import s3
+from .schemas import (ProjectCreate,
+                      ProjectBase,
+                      Project,
+                      NewImagePresignedUrlRequest,
+                      NewImagePresignedUrlResponse)
+from .services.minio import s3, get_presigned_url_put
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis
 
@@ -73,6 +77,17 @@ def create_upload_file(file: UploadFile):
             "state": "init",
             "versions": versions
         }
+
+
+@router.post("/images", response_model=NewImagePresignedUrlResponse)
+def get_new_image_url(body: NewImagePresignedUrlRequest):
+    project_id = str(uuid.uuid4())
+    input_file_name_less, ext = body.filename.rsplit('.', 1)
+    object_name_original = f"{project_id}/{input_file_name_less}_original.{ext}"
+    url = get_presigned_url_put(object_name_original)
+    res_dict = body.model_dump()
+    res_dict.update({"upload_link": url})
+    return res_dict
 
 
 @router.websocket("/ws")
