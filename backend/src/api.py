@@ -22,18 +22,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get('/', status_code=status.HTTP_200_OK)
-def index():
-    return {'Hello': 'World'}
-
-
-@router.post('/projects', response_model=ProjectCreate, status_code=status.HTTP_200_OK)
-def create_project(project_base: ProjectBase):
-    link_original = "http://example.com"
-    res = ProjectCreate(project_id=uuid.uuid4(), filename=project_base.filename, upload_link=link_original)
-    return res
-
-
 # TODO start background processing and return progress
 # save file.filename into the s3 storage
 # start background task for image processing
@@ -79,15 +67,15 @@ def create_upload_file(file: UploadFile):
 
 @router.post("/images", response_model=ProjectCreate)
 def get_new_image_url(project_base: ProjectBase):
-    project_id = str(uuid.uuid4())
+    project_id = uuid.uuid4()
     input_file_name_less, ext = project_base.filename.rsplit('.', 1)
-    object_name_original = f"{project_id}/{input_file_name_less}_original.{ext}"
+    object_name_original = f"{str(project_id)}/{input_file_name_less}_original.{ext}"
     url = get_presigned_url_put(object_name_original)
-    return {
-        "filename": project_base.filename,
-        "project_id": project_id,
-        "upload_link": url
-    }
+    return ProjectCreate(
+        filename=project_base.filename,
+        project_id=project_id,
+        upload_link=url
+    )
 
 
 @router.websocket("/ws")

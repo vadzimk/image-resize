@@ -19,30 +19,11 @@ from ..src.main import app
 client = TestClient(app)
 
 
-# @pytest.mark.skip
-def test_read_root():
-    res = client.get("/")
-    assert res.status_code == 200
-    assert res.json() == {'Hello': 'World'}
-
-
-# @pytest.mark.skip
-def test_create_project_returns_upload_link():
-    filename = "testing.jpg"
-    res = client.post("/projects", json={"filename": filename})
-    assert res.status_code == 200
-    body = res.json()
-    assert body["upload_link"] == "http://example.com"
-    assert body["filename"] == filename
-    print("type", type(body["project_id"]))
-    assert isinstance(body["project_id"], str) and len(body["project_id"]) > 0
-
-
 def upload_file(image_file_path):
+    assert os.path.exists(image_file_path)
     with open(image_file_path, "rb") as image_file:
         files = {"file": (os.path.basename(image_file_path), image_file, "image/jpeg")}
-        res = client.post("/uploadfile", files=files)
-        return res
+        return client.post("/uploadfile", files=files)
 
 
 def cleanup_after_upload_file(objects: List[str]):
@@ -57,9 +38,8 @@ def cleanup_after_upload_file(objects: List[str]):
 
 
 # @pytest.mark.skip
-def test_upload_file_returns_Project():
+def test_upload_file_endpoint_returns_Project():
     image_file_path = "./tests/photo.jpeg"
-    assert os.path.exists(image_file_path)
     res = upload_file(image_file_path)
     print("response: ", end='')
     pprint(res.json())
@@ -67,21 +47,21 @@ def test_upload_file_returns_Project():
     project_response = Project.model_validate_json(res.text)
     assert project_response.project_id is not None
     cleanup_after_upload_file(res.json().get("versions").values())
-    # objects = project_response.versions.values()
-    # # cleanup
-    # errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
-    # assert len(list(errors)) == 0
+    objects = project_response.versions.values()
+    # cleanup
+    errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
+    assert len(list(errors)) == 0
 
 
 # @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_using_file_upload():
+    """ subscribe events are create and delete object """
     image_file_path = "./tests/photo.jpeg"
     res = upload_file(image_file_path)
     project_id = res.json().get("project_id")
 
     async def trigger_event():
-        await asyncio.sleep(2)
         cleanup_after_upload_file(res.json().get("versions").values())
 
     asyncio.create_task(trigger_event())
@@ -170,7 +150,7 @@ async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_usin
         assert True
 
 
-def test_can_get_new_image_url_and_put_file():
+def test_can_get_new_image_url_and_put_file_from_images_post_endpoint():
     image_file_path = "./tests/photo.jpeg"
     assert os.path.exists(image_file_path)
     filename = os.path.basename(image_file_path)
