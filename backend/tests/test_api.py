@@ -3,7 +3,7 @@ import json
 import os
 import re
 from pprint import pprint
-from typing import List
+from typing import List, Tuple
 
 import httpx
 import pytest
@@ -13,10 +13,11 @@ from websockets import connect
 
 from ..src.websocket_manager import ws_manager
 from ..src.services.minio import s3
-from ..src.schemas import Project
+from ..src.schemas import Project, ProjectCreate
 from ..src.main import app
 
 client = TestClient(app)
+bucket_name = "images"
 
 
 def upload_file(image_file_path):
@@ -26,7 +27,7 @@ def upload_file(image_file_path):
         return client.post("/uploadfile", files=files)
 
 
-def cleanup_after_upload_file(objects: List[str]):
+def cleanup_s3_objects(objects: List[str]):
     """
     deletes s3 objects form minio storage
     :param objects: list of str of format "e4302caa-dbd7-4743-ba09-241bd48e35f3/photo_original.jpeg"
@@ -46,8 +47,10 @@ def test_upload_file_endpoint_returns_Project():
     assert res.status_code == 201
     project_response = Project.model_validate_json(res.text)
     assert project_response.project_id is not None
-    cleanup_after_upload_file(res.json().get("versions").values())
+    cleanup_s3_objects(res.json().get("versions").values())
     objects = project_response.versions.values()
+    print("objects", objects)
+    assert len(objects) == 5  # number of file versions
     # cleanup
     errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
     assert len(list(errors)) == 0
@@ -62,7 +65,9 @@ async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_usin
     project_id = res.json().get("project_id")
 
     async def trigger_event():
-        cleanup_after_upload_file(res.json().get("versions").values())
+        await asyncio.sleep(1)  # wait for the client to subscribe
+        print("----------> triggered event")
+        cleanup_s3_objects(res.json().get("versions").values())
 
     asyncio.create_task(trigger_event())
 
@@ -70,7 +75,7 @@ async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_usin
         await websocket.send(json.dumps({"subscribe": project_id}))
         res_confirmation = await websocket.recv()  # receive the confirmation message from websocket
         print("res_confirmation", res_confirmation)
-        assert json.loads(res_confirmation).get("status", None) == "OK"
+        assert json.loads(res_confirmation).get("status") == "OK"
         response = await websocket.recv()  # receive the next message from websocket (only the first message)
         # event triggered in the background somewhere here and the recv() unblocks
         message = json.loads(response)
@@ -150,23 +155,66 @@ async def test_websocket_subscribe_to_key_prefix_receives_subscribed_events_usin
         assert True
 
 
-def test_can_get_new_image_url_and_put_file_from_images_post_endpoint():
-    image_file_path = "./tests/photo.jpeg"
+def get_images_s3_upload_link_and_project_id(image_file_path)->Tuple[str, str]:
     assert os.path.exists(image_file_path)
     filename = os.path.basename(image_file_path)
     res = client.post("/images", json={"filename": filename})
-    body = res.json()
-    upload_link = body.get('upload_link')
-    print("upload_link: ", upload_link)
-    assert body['filename'] == filename
-    assert upload_link.startswith('http')
+    project_response = ProjectCreate.model_validate_json(res.text)
+    assert project_response.upload_link.startswith('http')
+    assert project_response.filename == filename
+    return project_response.upload_link, str(project_response.project_id)
 
+
+def s3_upload_link_put_file(image_file_path, upload_link):
     with open(image_file_path, 'rb') as file:
         response = httpx.put(upload_link, content=file, headers={'Content-Type': 'application/json'})
+    return response
+
+
+def test_can_get_new_image_url_and_put_file_using_images_post_endpoint():
+    image_file_path = "./tests/photo.jpeg"
+    upload_link, _ = get_images_s3_upload_link_and_project_id(image_file_path)
+    response = s3_upload_link_put_file(image_file_path, upload_link)
     print('response_text', response.text)
     assert response.status_code == 200
-    bucket_name = "images"
     pattern = fr'/{bucket_name}/([^?]+)'
     match = re.search(pattern, upload_link).group(1)
     print('match', match)
-    cleanup_after_upload_file([match])
+    cleanup_s3_objects([match])
+
+
+# @pytest.mark.skip
+@pytest.mark.asyncio
+async def test_when_new_file_posted_versions_are_created_in_s3():
+    # post original
+    image_file_path = "./tests/photo.jpeg"
+    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
+    objects_for_cleanup = []
+    # subscribe to ws s3 events
+
+    async def trigger_original_file_upload():
+        await asyncio.sleep(1)  # wait for client to subscribe
+        res = s3_upload_link_put_file(image_file_path, upload_link)
+        assert res.status_code == 200
+
+    asyncio.create_task(trigger_original_file_upload())
+
+    async with connect("ws://localhost:8000/ws") as websocket:
+        await websocket.send(json.dumps({"subscribe": project_id}))
+        res_confirmation = await websocket.recv()
+        assert json.loads(res_confirmation).get("status") == "OK"
+        response = await websocket.recv() # one object created - original
+        message = json.loads(response)
+        print()
+        pprint(message)
+        s3object_key = message['s3']['object']['key']
+        assert s3object_key.startswith(project_id)
+        objects_for_cleanup.append(s3object_key)
+
+    # check that versions are created in s3
+    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
+    print("objects", [o.object_name for o in all_objects_in_project])
+    assert len(all_objects_in_project) == 5  # number of versions of file
+
+    cleanup_s3_objects(objects_for_cleanup)
+
