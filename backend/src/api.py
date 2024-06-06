@@ -7,9 +7,9 @@ import uuid
 
 from fastapi import APIRouter, UploadFile, HTTPException
 from starlette import status
-from starlette.websockets import WebSocket
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from .exceptions import AlreadySubscribed
+from .exceptions import AlreadySubscribed, NotInSubscriptions
 from .websocket_manager import ws_manager
 from .schemas import (ProjectCreate,
                       ProjectBase,
@@ -87,17 +87,28 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             logger.debug(f"Path/ws Client message {data}")
             message: dict = json.loads(data)  # TODO add schema validation
-            if "subscribe" in message:
-                try:
-                    ws_manager.subscribe(websocket, message["subscribe"])
-                    message.update({"status_code": "200", "status": "OK"})
-                except AlreadySubscribed:
-                    pass
-                finally:
-                    await websocket.send_json(message)  # TODO uncomment to send subscription confirmation to the client
-                    # pass
-            # await ws_manager.broadcast({"Message text": data})  # TODO remove, was for testing when no subscription
+            await handle_message(websocket, message)
+    except WebSocketDisconnect:
+        logger.info("Client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
     finally:
         ws_manager.disconnect(websocket)
+
+
+async def handle_message(websocket: WebSocket, message: dict):
+    response_message = message.copy()
+    response_message.update({"status_code": "200", "status": "OK"})
+    try:
+        if "subscribe" in message:
+            ws_manager.subscribe(websocket, message["subscribe"])
+        elif "unsubscribe" in message:
+            ws_manager.unsubscribe(websocket, message["unsubscribe"])
+    except (AlreadySubscribed, NotInSubscriptions) as err:
+        response_message.update({"status_code": "400", "status": "Error", "message": str(err)})
+    except Exception as err:
+        response_message.update({"status_code": "400", "status": "Error", "message": "Unknown Server Error"})
+        raise err
+    finally:
+        await websocket.send_json(response_message)
+

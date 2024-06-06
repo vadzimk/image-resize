@@ -1,3 +1,5 @@
+import asyncio
+import json
 import os
 from typing import Tuple, List
 
@@ -8,8 +10,10 @@ from minio.deleteobjects import DeleteObject
 from ..src.services.minio import s3
 import httpx
 from ..src.main import app
+from websockets import connect
 
 client = TestClient(app)
+
 
 def upload_file(image_file_path):
     assert os.path.exists(image_file_path)
@@ -43,3 +47,30 @@ def s3_upload_link_put_file(image_file_path, upload_link):
     with open(image_file_path, 'rb') as file:
         response = httpx.put(upload_link, content=file, headers={'Content-Type': 'application/json'})
     return response
+
+
+class Subscription:
+    """ Subscribes to websocket to listen to events of a project_id
+    gets the subscription confirmation
+    and returns websocket to receive subsequent events
+    """
+
+    def __init__(self, project_id: str):
+        self.project_id = project_id
+        self.websocket = None
+
+    async def __aenter__(self):
+        self.websocket = await connect("ws://localhost:8000/ws")
+        await self.websocket.send(json.dumps({"subscribe": self.project_id}))
+        res_confirmation = await self.websocket.recv()
+        assert json.loads(res_confirmation).get("status") == "OK"
+        return self.websocket
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.websocket.close()
+
+
+async def trigger_original_file_upload(image_file_path, upload_link):
+    await asyncio.sleep(1)  # wait for client to subscribe
+    res = s3_upload_link_put_file(image_file_path, upload_link)
+    assert res.status_code == 200

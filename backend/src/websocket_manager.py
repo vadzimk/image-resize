@@ -3,7 +3,7 @@ from typing import List, Dict
 
 from starlette.websockets import WebSocket
 
-from .exceptions import AlreadySubscribed
+from .exceptions import AlreadySubscribed, NotInSubscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,11 @@ class WebsocketManager:
         if key_prefix in self.subscriptions[websocket]:
             raise AlreadySubscribed()
         self.subscriptions[websocket].append(key_prefix)
+
+    def unsubscribe(self, websocket: WebSocket, key_prefix: str):
+        if key_prefix not in self.subscriptions[websocket]:
+            raise NotInSubscriptions()
+        self.subscriptions[websocket].remove(key_prefix)
 
     async def broadcast(self, message: dict):  # sends all messages to all connections
         for conn in self.active_connections:
