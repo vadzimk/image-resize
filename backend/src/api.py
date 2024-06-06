@@ -14,7 +14,7 @@ from .websocket_manager import ws_manager
 from .schemas import (ProjectCreate,
                       ProjectBase,
                       Project)
-from .services.minio import s3, get_presigned_url_put
+from .services.minio import s3, get_presigned_url_put, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis
 
@@ -39,7 +39,7 @@ def create_upload_file(file: UploadFile):
         # need to make a copy because this is not working
         # s3.put_object("images", object_name=object_name_original, data=file.file, length=file.size)
         shutil.copyfileobj(file.file, temp_input_file.file)
-        s3.fput_object("images", object_name=object_name_original, file_path=temp_input_file.name)
+        s3.fput_object(bucket_name=bucket_name, object_name=object_name_original, file_path=temp_input_file.name)
 
         sizes = {
             "thumb": (150, 120),
@@ -54,7 +54,7 @@ def create_upload_file(file: UploadFile):
                 destination_temp_path = os.path.join(temp_dir, destination_name)
                 resize_with_aspect_ratio(temp_input_file, destination_temp_path, size_value)  # must use temporary file
                 object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
-                s3.fput_object("images", object_name=object_name, file_path=destination_temp_path)
+                s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
                 versions[size_key] = object_name
         # will close temp_input_file
 

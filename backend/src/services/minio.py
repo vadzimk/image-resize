@@ -32,4 +32,4 @@ def get_presigned_url_put(object_name):
     return url
 
 
-make_bucket_if_not_exist("images")
+make_bucket_if_not_exist(bucket_name)

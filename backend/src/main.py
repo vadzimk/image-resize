@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info("Logger connected")
 
-logger.info(f"Minio: {'connected' if s3.bucket_exists('images') else 'NOT connected'}")
+logger.info(f"Minio: {'connected' if s3.bucket_exists(bucket_name) else 'NOT connected'}")
 
 executor = ThreadPoolExecutor(max_workers=2)  # for each listener
 
@@ -79,7 +79,7 @@ def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
                         resize_with_aspect_ratio(temp_input_file, destination_temp_path,
                                                  size_value)  # must use temporary file
                         object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
-                        s3.fput_object("images", object_name=object_name, file_path=destination_temp_path)
+                        s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
                         versions[size_key] = object_name
                 # will close temp_input_file
         finally:
