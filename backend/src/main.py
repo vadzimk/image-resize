@@ -1,17 +1,13 @@
 import asyncio
 import logging
-import os
-import tempfile
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from celery import shared_task
 from fastapi import FastAPI
 from minio import S3Error
 
 from .worker import create_versions
-from .services.resize_service import resize_with_aspect_ratio
 from .websocket_manager import ws_manager
 from .api import router
 from .services.minio import s3, bucket_name
