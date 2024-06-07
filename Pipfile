@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 pytest-timeout = "*"
+redis = "*"
 
 [dev-packages]
 

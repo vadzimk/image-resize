@@ -98,7 +98,7 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     assert len(all_objects_in_project) == 5  # number of versions of file
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
-
+# @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_unsubscribe():
     # post original
@@ -119,3 +119,7 @@ async def test_websocket_can_unsubscribe():
         assert res['unsubscribe'] == project_id
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
+
+
+# TODO implement Celery
+# websocket listen when the status changes and post to subscribers

@@ -14,3 +14,8 @@ backend.test:
 backend.start:
 	cd backend \
 	&& uvicorn src.main:app --reload
+
+
+celery.start:
+	cd backend \
+	&& celery -A src.worker.celery worker --loglevel=info
