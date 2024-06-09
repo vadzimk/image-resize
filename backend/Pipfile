@@ -11,6 +11,10 @@ python-multipart = "*"
 pillow = "*"
 pytest = "*"
 pytest-asyncio = "*"
+pytest-timeout = "*"
+redis = "*"
+flower = "*"
+pika = "*"
 
 [dev-packages]
 

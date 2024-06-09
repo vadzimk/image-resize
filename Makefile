@@ -19,3 +19,8 @@ backend.start:
 celery.start:
 	cd backend \
 	&& celery -A src.worker.celery worker --loglevel=info
+
+
+celery.flower:
+	cd backend \
+	&& celery -A src.worker.celery flower

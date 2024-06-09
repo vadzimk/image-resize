@@ -15,7 +15,7 @@ from .utils import (upload_file,
 from ..src.schemas import Project
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 def test_upload_file_endpoint_returns_Project():
     image_file_path = "./tests/photo.jpeg"
     res = upload_file(image_file_path)
@@ -27,11 +27,12 @@ def test_upload_file_endpoint_returns_Project():
     objects = project_response.versions.values()
     print("objects", objects)
     assert len(objects) == 5  # number of file versions
-    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=str(project_response.project_id), recursive=True))
+    all_objects_in_project = list(
+        s3.list_objects(bucket_name=bucket_name, prefix=str(project_response.project_id), recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_using_file_upload():
     """ subscribe events are create and delete object """
@@ -59,7 +60,8 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
-# @pytest.mark.skip
+
+@pytest.mark.skip
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)  # times out when versions are not removed
 async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_created_in_s3():

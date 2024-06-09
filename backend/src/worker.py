@@ -1,11 +1,15 @@
 import asyncio
+import json
 import os
 import tempfile
+from contextlib import contextmanager
 
+import pika
 from celery import Celery, shared_task
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
+from pika import PlainCredentials
 
 from .websocket_manager import ws_manager
 from .services.minio import s3, bucket_name
@@ -14,7 +18,7 @@ from .services.resize_service import resize_with_aspect_ratio
 load_dotenv()
 
 celery = Celery(__name__,
-                broker=os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0"),
+                broker=os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@127.0.0.1:5672"),
                 backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0"),
                 include=["src.main"]  # other modules used by celery to include
                 )
@@ -35,6 +39,25 @@ class CeleryConfig:
 celery.config_from_object(CeleryConfig)
 celery.set_default()  # to use shared_task
 celery_logger = get_task_logger(__name__)
+
+queue_name = "task_notifications"
+
+
+@contextmanager
+def rabbitmq_channel_connection():
+    try:
+        rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(
+            host="127.0.0.1",
+            port=5672,
+            credentials=PlainCredentials(username="guest", password="guest")))
+        rabbitmq_channel = rabbitmq_connection.channel()
+        rabbitmq_channel.queue_declare(queue=queue_name)
+        yield rabbitmq_channel, rabbitmq_connection
+    finally:
+        if "rabbitmq_channel" in locals() and rabbitmq_channel.is_open:
+            rabbitmq_channel.close()
+        if "rabbitmq_connection" in locals() and rabbitmq_connection.is_open:
+            rabbitmq_connection.close()
 
 
 @shared_task
@@ -70,7 +93,6 @@ def create_versions(object_name_original: str):
         response.release_conn()
 
 
-
 def broadcast(message):
     loop = asyncio.get_event_loop()
     celery_logger.info(f"Entered postrun broadcast, loop is {loop is not None}")
@@ -78,11 +100,18 @@ def broadcast(message):
     task.add_done_callback(lambda future: f"task exception {future.exception()}")
 
 
+def notify_client(message: dict):
+    with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
+        rabbitmq_channel.basic_publish(exchange='',
+                                       routing_key=queue_name,
+                                       body=json.dumps(message))
+
+
 @task_postrun.connect
 def task_postrun_handler(task_id, state, **kwargs):
-    message = f"Task {task_id} finished with state {state}"
-    broadcast(message)
-    celery_logger.info(message)
+    message = {task_id: f"Task finished with state {state}"}
+    notify_client(message)
+    celery_logger.info(json.dumps(message))
 
 # TODO The Celery worker is a separate process.
 #  If you intend to emit a Socket.IO event to a client from the worker,

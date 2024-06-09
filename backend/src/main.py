@@ -7,12 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from minio import S3Error
 
-from .worker import create_versions, celery_logger
+from .worker import create_versions, rabbitmq_channel_connection, queue_name
 from .websocket_manager import ws_manager
 from .api import router
 from .services.minio import s3, bucket_name
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.info("Logger connected")
 
@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
     loop = asyncio.get_event_loop()
     executor.submit(listen_create_delete_s3_events_to_publish, loop)
     executor.submit(listen_create_s3_events_to_upload_versions, loop)
+    executor.submit(listen_celery_task_notifications_queue_to_publish, loop)
     yield
     # after yield: same as @app.on_event('shutdown')
     executor.shutdown(wait=False)
@@ -70,4 +71,15 @@ def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
         raise e
 
 
+def listen_celery_task_notifications_queue_to_publish(loop: AbstractEventLoop):
+    logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish")
 
+    def callback(ch, method, properties, body):
+        logger.info(f"Entered callback")
+        asyncio.run_coroutine_threadsafe(ws_manager.broadcast(body),
+                                         loop=loop)  # TODO change to publish appropriate message
+
+    with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
+        logger.debug(f"rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
+        rabbitmq_channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
+        rabbitmq_channel.start_consuming()

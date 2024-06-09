@@ -688,3 +688,277 @@ This setup allows each client to subscribe to multiple prefixes and receive mess
 - the client calls websocket endpoint to subscribe to the events about the project_id
 - client uses pre-signed url for the file upload
 - websocket endpoint informs about project status
+
+
+
+---
+To achieve the scenario where a Celery worker notifies a web client via a WebSocket event after completing a task, 
+you need to set up a message queue (e.g., Redis) for communication between the Celery worker and the FastAPI server. 
+Below is a basic code example illustrating how this can be done:
+
+    Setup FastAPI with WebSockets
+    Configure Celery
+    Use Redis for message passing
+
+1. Setup FastAPI with WebSockets
+
+First, set up FastAPI to handle WebSocket connections:
+
+```python
+
+# app/main.py
+from fastapi import FastAPI, WebSocket
+from fastapi.websockets import WebSocketDisconnect
+from celery.result import AsyncResult
+import redis
+
+app = FastAPI()
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+websockets = {}
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await websocket.accept()
+    websockets[client_id] = websocket
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Message text was: {data}")
+    except WebSocketDisconnect:
+        del websockets[client_id]
+
+@app.get("/status/{task_id}/{client_id}")
+async def get_status(task_id: str, client_id: str):
+    result = AsyncResult(task_id)
+    if result.state == 'SUCCESS':
+        if client_id in websockets:
+            await websockets[client_id].send_text(f"Task {task_id} finished")
+    return {"task_id": task_id, "state": result.state}
+```
+2. Configure Celery
+
+Next, configure Celery to use Redis as the message broker:
+
+```python
+
+# app/celery_app.py
+from celery import Celery
+
+celery_app = Celery(
+    'tasks',
+    broker='redis://localhost:6379/0',
+    backend='redis://localhost:6379/0'
+)
+
+@celery_app.task
+def long_running_task(data):
+    # Simulate a long-running task
+    import time
+    time.sleep(10)
+    return {"result": "Task completed", "data": data}
+```
+
+3. Notify via Redis and WebSocket
+
+Modify the Celery worker to notify FastAPI via Redis once the task is complete:  
+
+```python
+
+# app/tasks.py
+import redis
+from .celery_app import celery_app
+
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+@celery_app.task
+def long_running_task(data, client_id):
+    import time
+    time.sleep(10)  # Simulate a long-running task
+    redis_client.publish('task_notifications', client_id)
+    return {"result": "Task completed", "data": data}
+```
+4. Subscribe to Redis Channel in FastAPI
+
+Finally, subscribe to the Redis channel in FastAPI to forward messages to the WebSocket:
+
+```python
+
+# app/main.py (continued)
+import threading
+
+def redis_listener():
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe('task_notifications')
+    for message in pubsub.listen():
+        if message['type'] == 'message':
+            client_id = message['data'].decode('utf-8')
+            if client_id in websockets:
+                loop = asyncio.get_event_loop()
+                loop.create_task(websockets[client_id].send_text("Task completed"))
+
+threading.Thread(target=redis_listener, daemon=True).start()
+```
+Running the Application
+
+To run the application:
+
+    Start the FastAPI server:
+
+```bash
+
+uvicorn app.main:app --reload
+```
+Start the Celery worker:
+
+```bash
+
+    celery -A app.celery_app worker --loglevel=info
+```
+This setup allows Celery to notify the FastAPI server via Redis when a task is complete, and FastAPI will then send a WebSocket message to the client.
+i want to use rabbitmq instead as message brocker and keep redis as result backend
+
+---
+
+To use RabbitMQ as the message broker and Redis as the result backend, 
+you need to configure Celery accordingly and set up FastAPI to communicate with RabbitMQ for notifications.
+
+
+Here’s a step-by-step guide on how to achieve this:
+1. Setup FastAPI with WebSockets
+
+First, set up FastAPI to handle WebSocket connections:
+
+```python
+
+# app/main.py
+from fastapi import FastAPI, WebSocket
+from fastapi.websockets import WebSocketDisconnect
+from celery.result import AsyncResult
+import redis
+
+app = FastAPI()
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+websockets = {}
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await websocket.accept()
+    websockets[client_id] = websocket
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Message text was: {data}")
+    except WebSocketDisconnect:
+        del websockets[client_id]
+
+@app.get("/status/{task_id}/{client_id}")
+async def get_status(task_id: str, client_id: str):
+    result = AsyncResult(task_id)
+    if result.state == 'SUCCESS':
+        if client_id in websockets:
+            await websockets[client_id].send_text(f"Task {task_id} finished")
+    return {"task_id": task_id, "state": result.state}
+```
+2. Configure Celery with RabbitMQ and Redis
+
+Configure Celery to use RabbitMQ as the message broker and Redis as the result backend:
+
+```python
+
+# app/celery_app.py
+from celery import Celery
+
+celery_app = Celery(
+    'tasks',
+    broker='amqp://guest:guest@localhost//',  # RabbitMQ broker URL
+    backend='redis://localhost:6379/0'        # Redis result backend
+)
+
+@celery_app.task
+def long_running_task(data):
+    import time
+    time.sleep(10)
+    return {"result": "Task completed", "data": data}
+```
+3. Notify via RabbitMQ and WebSocket
+
+Set up a RabbitMQ listener to forward messages to the WebSocket:
+
+```python
+
+# app/tasks.py
+import pika
+import json
+from .celery_app import celery_app
+
+# Establish RabbitMQ connection and channel once
+rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+rabbitmq_channel = rabbitmq_connection.channel()
+rabbitmq_channel.queue_declare(queue='task_notifications')
+
+def notify_client(client_id):
+    message = json.dumps({'client_id': client_id})
+    rabbitmq_channel.basic_publish(exchange='',
+                                   routing_key='task_notifications',
+                                   body=message)
+
+@celery_app.task
+def long_running_task(data, client_id):
+    import time
+    time.sleep(10)  # Simulate a long-running task
+    notify_client(client_id)
+    return {"result": "Task completed", "data": data}
+```
+4. Subscribe to RabbitMQ in FastAPI
+
+Subscribe to the RabbitMQ queue in FastAPI to forward messages to the WebSocket:
+
+```python
+
+# app/main.py (continued)
+import threading
+import pika
+import json
+
+# Establish RabbitMQ connection and channel once
+rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+rabbitmq_channel = rabbitmq_connection.channel()
+rabbitmq_channel.queue_declare(queue='task_notifications')
+
+def rabbitmq_listener():
+    def callback(ch, method, properties, body):
+        message = json.loads(body)
+        client_id = message['client_id']
+        if client_id in websockets:
+            loop = asyncio.get_event_loop()
+            loop.create_task(websockets[client_id].send_text("Task completed"))
+
+    rabbitmq_channel.basic_consume(queue='task_notifications', on_message_callback=callback, auto_ack=True)
+    rabbitmq_channel.start_consuming()
+
+threading.Thread(target=rabbitmq_listener, daemon=True).start()
+```
+Running the Application
+
+To run the application:
+
+    Start the RabbitMQ server:
+
+```    bash
+
+sudo rabbitmq-server
+```
+Start the FastAPI server:
+
+```bash
+
+uvicorn app.main:app --reload
+```
+Start the Celery worker:
+
+```bash
+
+    celery -A app.celery_app worker --loglevel=info
+```
+This setup allows Celery to use RabbitMQ as the message broker and Redis as the result backend. 
+When a task is complete, Celery sends a notification to RabbitMQ, and FastAPI listens to RabbitMQ to forward the message to the appropriate WebSocket client.

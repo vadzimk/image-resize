@@ -2,6 +2,7 @@ version: "3.5"
 
 volumes:
   redis_data:
+  rabbitmq_data:
 
 services:
   minio:
@@ -37,6 +38,15 @@ services:
       "
     restart: unless-stopped
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: image-resize-rabbitmq
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
   redis:
     image: redis:7
     container_name: image-resize-redis
@@ -46,6 +56,8 @@ services:
     command: [ 'redis-server', '--appendonly', 'yes' ]
     volumes:
       - redis_data:/data
+
+
 
         #  postgres:
         #    image: postgres
