@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from ..src.schemas import ProjectCreate
 from minio.deleteobjects import DeleteObject
-from ..src.services.minio import s3
+from ..src.services.minio import s3, bucket_name
 import httpx
 from ..src.main import app
 from websockets import connect
@@ -37,7 +37,7 @@ def cleanup_s3_objects(objects: List[str]):
     deletes s3 objects form minio storage
     :param objects: list of str of format "e4302caa-dbd7-4743-ba09-241bd48e35f3/photo_original.jpeg"
     """
-    errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
+    errors = s3.remove_objects(bucket_name, [DeleteObject(obj) for obj in objects])
     if len(list(errors)) != 0:
         raise AssertionError
     print(f"cleanup_s3_objects: Done. Deleted {len(objects)} objects.")

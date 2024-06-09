@@ -4,8 +4,7 @@ import re
 from pprint import pprint
 import pytest
 from websockets import connect
-from ..src.services.minio import s3
-from minio.deleteobjects import DeleteObject
+from ..src.services.minio import s3, bucket_name
 from .utils import (upload_file,
                     get_images_s3_upload_link_and_project_id,
                     cleanup_s3_objects,
@@ -14,8 +13,6 @@ from .utils import (upload_file,
                     )
 
 from ..src.schemas import Project
-
-bucket_name = "images"
 
 
 # @pytest.mark.skip
@@ -27,13 +24,11 @@ def test_upload_file_endpoint_returns_Project():
     assert res.status_code == 201
     project_response = Project.model_validate_json(res.text)
     assert project_response.project_id is not None
-    cleanup_s3_objects(res.json().get("versions").values())
     objects = project_response.versions.values()
     print("objects", objects)
     assert len(objects) == 5  # number of file versions
-    # cleanup
-    errors = s3.remove_objects("images", [DeleteObject(obj) for obj in objects])
-    assert len(list(errors)) == 0
+    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=str(project_response.project_id), recursive=True))
+    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
 # @pytest.mark.skip
@@ -61,7 +56,8 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
         message = json.loads(response)
         pprint(message)
         assert message['s3']['object']['key'].startswith(project_id)
-
+    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
+    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 # @pytest.mark.skip
 @pytest.mark.asyncio
@@ -98,6 +94,7 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     assert len(all_objects_in_project) == 5  # number of versions of file
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
+
 # @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_unsubscribe():
@@ -119,7 +116,8 @@ async def test_websocket_can_unsubscribe():
         assert res['unsubscribe'] == project_id
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
-
+    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
+    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 # TODO implement Celery
 # websocket listen when the status changes and post to subscribers

@@ -1,20 +1,43 @@
+import asyncio
 import os
 import tempfile
 
-from celery import Celery
+from celery import Celery, shared_task
+from celery.signals import task_postrun
+from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
+
+from .websocket_manager import ws_manager
 from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 
-
 load_dotenv()
 
-celery = Celery(__name__)
-celery.conf.broker_url = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
-celery.conf.result_backend = os.environ.get("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0")
+celery = Celery(__name__,
+                broker=os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0"),
+                backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0"),
+                include=["src.main"]  # other modules used by celery to include
+                )
 
 
-@celery.task
+class CeleryConfig:
+    task_create_missing_queues = True
+    celery_store_errors_even_if_ignored = True
+    task_store_errors_even_if_ignored = True
+    task_ignore_result = False
+    task_serializer = "pickle"
+    result_serializer = "pickle"
+    event_serializer = "json"
+    accept_content = ["pickle", "application/json", "application/x-python-serialize"]
+    result_accept_content = ["pickle", "application/json", "application/x-python-serialize"]
+
+
+celery.config_from_object(CeleryConfig)
+celery.set_default()  # to use shared_task
+celery_logger = get_task_logger(__name__)
+
+
+@shared_task
 def create_versions(object_name_original: str):
     project_id, basename = object_name_original.rsplit("/")
     basename_wo_ext, ext = basename.rsplit(".")
@@ -45,3 +68,24 @@ def create_versions(object_name_original: str):
     finally:
         response.close()
         response.release_conn()
+
+
+
+def broadcast(message):
+    loop = asyncio.get_event_loop()
+    celery_logger.info(f"Entered postrun broadcast, loop is {loop is not None}")
+    task = loop.create_task(ws_manager.broadcast(message))
+    task.add_done_callback(lambda future: f"task exception {future.exception()}")
+
+
+@task_postrun.connect
+def task_postrun_handler(task_id, state, **kwargs):
+    message = f"Task {task_id} finished with state {state}"
+    broadcast(message)
+    celery_logger.info(message)
+
+# TODO The Celery worker is a separate process.
+#  If you intend to emit a Socket.IO event to a client from the worker,
+#  then you have to configure a message queue, so that the worker can communicate with the main server,
+#  which controls the socket. Have you read about emitting from auxiliary processes at all in the documentation?
+#  I suggest you start from there.

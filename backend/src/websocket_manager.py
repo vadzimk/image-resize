@@ -39,7 +39,9 @@ class WebsocketManager:
                                                     s.key_prefix != key_prefix]
 
     async def broadcast(self, message: dict):  # sends all messages to all connections
+        logger.info(f"Entered async broadcast, connections_length: {len(self.connection_subscriptions.keys())}")
         for conn in self.connection_subscriptions.keys():
+            logger.info(f"Sending Broadcast to {conn} : {message}")
             await conn.send_json(message)
 
     async def publish(self, message: dict):  # sends message to subscribed connections

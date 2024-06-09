@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from minio import S3Error
 
-from .worker import create_versions
+from .worker import create_versions, celery_logger
 from .websocket_manager import ws_manager
 from .api import router
 from .services.minio import s3, bucket_name
@@ -18,7 +18,7 @@ logger.info("Logger connected")
 
 logger.info(f"Minio: {'connected' if s3.bucket_exists(bucket_name) else 'NOT connected'}")
 
-executor = ThreadPoolExecutor(max_workers=2)  # for each listener
+executor = ThreadPoolExecutor(max_workers=3)  # for each listener
 
 
 @asynccontextmanager
@@ -37,9 +37,6 @@ app.include_router(router)
 
 
 def listen_create_delete_s3_events_to_publish(loop: AbstractEventLoop):
-    async def publish_event(message: dict):
-        await ws_manager.publish(message)
-
     try:
         # publish create/delete events to WS manager
         with s3.listen_bucket_notification(bucket_name=bucket_name,
@@ -48,7 +45,7 @@ def listen_create_delete_s3_events_to_publish(loop: AbstractEventLoop):
             for event in events:
                 for record in event.get("Records", []):
                     logger.info(f'(01) {record["eventName"]}: {record["s3"]["object"]["key"]}')
-                asyncio.run_coroutine_threadsafe(publish_event(event), loop=loop)  # publish to ws_manager
+                asyncio.run_coroutine_threadsafe(ws_manager.publish(event), loop=loop)  # publish to ws_manager
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
 
@@ -71,3 +68,6 @@ def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
     except Exception as e:
         logger.error(f"Unexpected error {e}")
         raise e
+
+
+
