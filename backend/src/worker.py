@@ -89,7 +89,7 @@ def create_versions(object_name_original: str):
     finally:
         response.close()
         response.release_conn()
-    return project_id
+    return {"project_id": project_id, "versions": versions}
 
 
 def notify_client(message: dict):
@@ -100,8 +100,9 @@ def notify_client(message: dict):
 
 
 @task_postrun.connect
-def task_postrun_handler(task_id, retval, state, **kwargs):
-    message = {"project_id": retval, "state": state}  # TODO change to publish appropriate message <---||---
+def task_postrun_handler(task_id, retval: dict, state, **kwargs):
+    message = retval.copy()
+    message.update({"state": state})
     notify_client(message)
     celery_logger.info(json.dumps(message))
 

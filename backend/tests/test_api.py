@@ -88,14 +88,17 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
                     if re.search(pattern, s3object_key):
                         print("removing", version)
                         versions.remove(version)
+        assert len(versions) == 0  # all versions were created
         print("Receiving last")
         response = await websocket.recv()  # get the next object message
         message = json.loads(response)
-        # verify state message
+        # verify state in websocket message
         assert message.get("project_id") == project_id
         assert message.get("state") == "SUCCESS"
+        # verify versions in websocket message
+        assert len(message.get("versions").items()) == 5
         print(message)
-    assert len(versions) == 0  # all versions were created
+
 
     # check that versions are created in s3 by listing s3 objects
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
