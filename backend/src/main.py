@@ -64,7 +64,8 @@ def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
                     if s3_object_key.rsplit(".")[0].endswith("_original"):
                         logger.debug(f"+++++ found original {s3_object_key}")
                         task = create_versions.s(object_name_original=s3_object_key).apply_async()
-                        logger.info(f"task-id: {task.id}")
+                        result_project_id = task.get()
+                        logger.info(f"task-id: {task.id}, result_project_id: {result_project_id}")
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
     except Exception as e:
@@ -78,7 +79,7 @@ def listen_celery_task_notifications_queue_to_publish(loop: AbstractEventLoop):
     def callback(ch, method, properties, body):
         logger.info(f"Entered callback")
         asyncio.run_coroutine_threadsafe(ws_manager.broadcast(json.loads(body)),
-                                         loop=loop)  # TODO change to publish appropriate message
+                                         loop=loop)
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         logger.debug(f"rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")

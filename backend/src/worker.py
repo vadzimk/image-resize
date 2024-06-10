@@ -91,6 +91,7 @@ def create_versions(object_name_original: str):
     finally:
         response.close()
         response.release_conn()
+    return project_id
 
 
 def broadcast(message):
@@ -108,8 +109,8 @@ def notify_client(message: dict):
 
 
 @task_postrun.connect
-def task_postrun_handler(task_id, state, **kwargs):
-    message = {task_id: f"Task finished with state {state}"}
+def task_postrun_handler(task_id, retval, state, **kwargs):
+    message = {"project_id": retval, "state": state} # TODO change to publish appropriate message <---||---
     notify_client(message)
     celery_logger.info(json.dumps(message))
 
