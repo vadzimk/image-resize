@@ -77,7 +77,7 @@ def create_versions(object_name_original: str):
         with tempfile.NamedTemporaryFile(delete=True) as temp_input_file:
             temp_input_file.write(response.data)
             with tempfile.TemporaryDirectory() as temp_dir:
-                for size_key, size_value in sizes.items():
+                for index, (size_key, size_value) in enumerate(sizes.items()):
                     destination_name = f"{input_file_name_less}_{size_key}.{ext}"
                     destination_temp_path = os.path.join(temp_dir, destination_name)
                     resize_with_aspect_ratio(temp_input_file, destination_temp_path,
@@ -85,6 +85,14 @@ def create_versions(object_name_original: str):
                     object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
                     s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
                     versions[size_key] = object_name
+                    message = {"project_id": project_id,
+                               "versions": versions,
+                               "state": "PROGRESS",
+                               "progress": {
+                                   "total": len(sizes.keys()),
+                                   "done": index + 1,
+                               }}
+                    notify_client(message)
             # will close temp_input_file
     finally:
         response.close()
@@ -105,5 +113,3 @@ def task_postrun_handler(task_id, retval: dict, state, **kwargs):
     message.update({"state": state})
     notify_client(message)
     celery_logger.info(json.dumps(message))
-
-

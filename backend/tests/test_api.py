@@ -76,19 +76,34 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     # subscribe to ws s3 events
     async with Subscription(project_id) as websocket:
         while len(versions) > 0:
-            response = await websocket.recv()  # get the next object message
+            response = await websocket.recv()  # receive s3 event on object creation
             message = json.loads(response)
+            # print("# receive s3 event on object creation")
+            # pprint(message)
             s3object_key = message['s3']['object']['key']
             assert s3object_key.startswith(project_id)
 
-            # verify receipt of websocket messages about all versions created
+            skip_progress_event = False
             if 's3:ObjectCreated' in message['eventName']:
                 for version in versions:
                     pattern = fr'_{version}(?=.*(?:[^.]*\.(?!.*\.))|$)'
                     if re.search(pattern, s3object_key):
-                        print("removing", version)
+                        print("s3 created", version)
                         versions.remove(version)
+                        if version == "original":  # no progress event follows after that
+                            skip_progress_event = True
+                        break
+            if skip_progress_event:
+                continue
+            response = await websocket.recv()  # receive celery event on progress
+            message = json.loads(response)
+            # print("# receive celery event on progress")
+            # pprint(message)
+            assert message.get("state") == "PROGRESS"
+            assert message.get("progress").get("done") == len(message.get("versions").keys()) - 1
+
         assert len(versions) == 0  # all versions were created
+
         print("Receiving last")
         response = await websocket.recv()  # get the next object message
         message = json.loads(response)
@@ -98,7 +113,6 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
         # verify versions in websocket message
         assert len(message.get("versions").items()) == 5
         print(message)
-
 
     # check that versions are created in s3 by listing s3 objects
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
