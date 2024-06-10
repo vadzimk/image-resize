@@ -78,7 +78,7 @@ def listen_celery_task_notifications_queue_to_publish(loop: AbstractEventLoop):
 
     def callback(ch, method, properties, body):
         logger.info(f"Entered callback")
-        asyncio.run_coroutine_threadsafe(ws_manager.broadcast(json.loads(body)),
+        asyncio.run_coroutine_threadsafe(ws_manager.publish_celery_event(json.loads(body)),
                                          loop=loop)
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):

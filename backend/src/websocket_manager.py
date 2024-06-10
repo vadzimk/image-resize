@@ -59,9 +59,12 @@ class WebsocketManager:
                         await conn.send_json(record)
                         break  # No need to check other prefixes if one matches (prefix is unique)
 
-    # async def publish_celery_event(self, message: dict):
-    #     for conn, subscriptions in self.connection_subscriptions.items():
-    #         for sub in subscriptions
+    async def publish_celery_event(self, message: dict):
+        for conn, subscriptions in self.connection_subscriptions.items():
+            for sub in subscriptions:
+                if message.get("project_id") == sub.key_prefix:
+                    await conn.send_json(message)
+                    break
 
 
 ws_manager = WebsocketManager()

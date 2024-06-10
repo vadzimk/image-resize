@@ -94,13 +94,6 @@ def create_versions(object_name_original: str):
     return project_id
 
 
-def broadcast(message):
-    loop = asyncio.get_event_loop()
-    celery_logger.info(f"Entered postrun broadcast, loop is {loop is not None}")
-    task = loop.create_task(ws_manager.broadcast(message))
-    task.add_done_callback(lambda future: f"task exception {future.exception()}")
-
-
 def notify_client(message: dict):
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         rabbitmq_channel.basic_publish(exchange='',
@@ -110,12 +103,8 @@ def notify_client(message: dict):
 
 @task_postrun.connect
 def task_postrun_handler(task_id, retval, state, **kwargs):
-    message = {"project_id": retval, "state": state} # TODO change to publish appropriate message <---||---
+    message = {"project_id": retval, "state": state}  # TODO change to publish appropriate message <---||---
     notify_client(message)
     celery_logger.info(json.dumps(message))
 
-# TODO The Celery worker is a separate process.
-#  If you intend to emit a Socket.IO event to a client from the worker,
-#  then you have to configure a message queue, so that the worker can communicate with the main server,
-#  which controls the socket. Have you read about emitting from auxiliary processes at all in the documentation?
-#  I suggest you start from there.
+
