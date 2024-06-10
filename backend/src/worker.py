@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import tempfile
@@ -11,7 +10,6 @@ from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
 from pika import PlainCredentials
 
-from .websocket_manager import ws_manager
 from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 

@@ -15,7 +15,7 @@ from .utils import (upload_file,
 from ..src.schemas import Project
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 def test_upload_file_endpoint_returns_Project():
     image_file_path = "./tests/photo.jpeg"
     res = upload_file(image_file_path)
@@ -104,7 +104,7 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_unsubscribe():
     # post original
