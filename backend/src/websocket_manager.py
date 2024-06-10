@@ -17,10 +17,11 @@ class Subscription:
 
 class WebsocketManager:
     def __init__(self):
-        self.connection_subscriptions: Dict[WebSocket, List[Subscription]] = {}  # TODO move this to Redis
+        self.connection_subscriptions: Dict[WebSocket, List[Subscription]] = {}
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
+        logger.info(f"WS Client connected {websocket}")
         self.connection_subscriptions[websocket] = []
 
     def disconnect(self, websocket: WebSocket):
@@ -39,12 +40,17 @@ class WebsocketManager:
                                                     s.key_prefix != key_prefix]
 
     async def broadcast(self, message: dict):  # sends all messages to all connections
-        logger.info(f"Entered async broadcast, connections_length: {len(self.connection_subscriptions.keys())}")
-        for conn in self.connection_subscriptions.keys():
-            logger.info(f"Sending Broadcast to {conn} : {message}")
-            await conn.send_json(message)
+        connections = list(self.connection_subscriptions.keys())
+        logger.info(f"Entered async broadcast, connections_length: {len(connections)}: {connections}")
+        for conn in connections:
+            try:
+                await conn.send_json(message)
+                logger.info(f"Sent Broadcast to {conn} : {message}")
+            except Exception as e:
+                logger.error(e)
+                raise e
 
-    async def publish(self, message: dict):  # sends message to subscribed connections
+    async def publish_s3_event(self, message: dict):  # sends message to subscribed connections
         for conn, subscriptions in self.connection_subscriptions.items():
             for sub in subscriptions:
                 for record in message.get("Records", []):
@@ -52,6 +58,10 @@ class WebsocketManager:
                     if record_key.startswith(sub.key_prefix):
                         await conn.send_json(record)
                         break  # No need to check other prefixes if one matches (prefix is unique)
+
+    # async def publish_celery_event(self, message: dict):
+    #     for conn, subscriptions in self.connection_subscriptions.items():
+    #         for sub in subscriptions
 
 
 ws_manager = WebsocketManager()

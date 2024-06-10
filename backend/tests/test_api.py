@@ -32,7 +32,7 @@ def test_upload_file_endpoint_returns_Project():
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_using_file_upload():
     """ subscribe events are create and delete object """
@@ -61,7 +61,7 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)  # times out when versions are not removed
 async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_created_in_s3():
@@ -88,6 +88,10 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
                     if re.search(pattern, s3object_key):
                         print("removing", version)
                         versions.remove(version)
+        # print("Receiving last")
+        # response = await websocket.recv()  # get the next object message
+        # message = json.loads(response)
+        # print(message)
     assert len(versions) == 0  # all versions were created
 
     # check that versions are created in s3 by listing s3 objects

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
@@ -46,7 +47,7 @@ def listen_create_delete_s3_events_to_publish(loop: AbstractEventLoop):
             for event in events:
                 for record in event.get("Records", []):
                     logger.info(f'(01) {record["eventName"]}: {record["s3"]["object"]["key"]}')
-                asyncio.run_coroutine_threadsafe(ws_manager.publish(event), loop=loop)  # publish to ws_manager
+                asyncio.run_coroutine_threadsafe(ws_manager.publish_s3_event(event), loop=loop)  # publish to ws_manager
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
 
@@ -76,7 +77,7 @@ def listen_celery_task_notifications_queue_to_publish(loop: AbstractEventLoop):
 
     def callback(ch, method, properties, body):
         logger.info(f"Entered callback")
-        asyncio.run_coroutine_threadsafe(ws_manager.broadcast(body),
+        asyncio.run_coroutine_threadsafe(ws_manager.broadcast(json.loads(body)),
                                          loop=loop)  # TODO change to publish appropriate message
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):

@@ -81,7 +81,6 @@ def get_new_image_url(project_base: ProjectBase):
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
-    logger.info("WS Client connected")
     try:
         while True:
             data = await websocket.receive_text()
