@@ -17,10 +17,12 @@ from .exceptions import AlreadySubscribed, NotInSubscriptions
 from .websocket_manager import ws_manager
 from .schemas import (ProjectCreate,
                       ProjectBase,
-                      Project, SubscribeModel, UnSubscribeModel)
+                      Project,
+                      SubscribeModel,
+                      UnSubscribeModel, OnSubscribeModel, OnUnSubscribeModel)
 from .services.minio import s3, get_presigned_url_put, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
-from .utils import timethis
+from .utils import timethis, validate_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -104,11 +106,11 @@ async def handle_message(websocket: WebSocket, message: dict):
     """
     validates websocket incoming messages and passes them to ws_manager
     """
-    logger.info("Enter handle_message")
-    message_model = parse_obj_as(Union[SubscribeModel, UnSubscribeModel], message)
-    logger.info(f"handle_message message_model {message_model}")
+    logger.debug("Enter handle_message")
+    message_model = validate_message(message, [SubscribeModel, UnSubscribeModel])
+    logger.debug(f"handle_message message_model {message_model}")
     response_message = message_model.model_dump()
-    response_message.update({"status_code": "200", "status": "OK"})
+    response_message.update({"status_code": 200, "status": "OK"})
     try:
         if isinstance(message_model, SubscribeModel):
             logger.info(f"isinstance(message_model, SubscribeModel) {type(message_model.subscribe)}")
@@ -120,12 +122,14 @@ async def handle_message(websocket: WebSocket, message: dict):
         else:
             raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")
     except (AlreadySubscribed, NotInSubscriptions) as err:
-        response_message.update({"status_code": "400", "status": "Error", "message": str(err)})
+        response_message.update({"status_code": 400, "status": "Error", "message": str(err)})
     except Exception as err:
-        response_message.update({"status_code": "400", "status": "Error", "message": "Unknown Server Error"})
+        response_message.update({"status_code": 400, "status": "Error", "message": "Unknown Server Error"})
         raise err
     finally:
-        await websocket.send_json(jsonable_encoder(response_message))
-        logger.info(f"handle_message: Done {jsonable_encoder(response_message)}")
+        await websocket.send_json(
+            jsonable_encoder(
+                validate_message(response_message, [OnSubscribeModel, OnUnSubscribeModel])
+        ))
 
 

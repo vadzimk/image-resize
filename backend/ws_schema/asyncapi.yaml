@@ -83,13 +83,7 @@ components:
     subscribe:
       summary: subscribe to a particular project_id
       payload:
-        type: object
-        required:
-          - subscribe
-        properties:
-          subscribe:
-            type: string
-            description: project uuid
+        $ref: '#/components/schemas/RequestSubscribeModel'
       examples:
         - name: subscribe example
           payload:
@@ -97,17 +91,11 @@ components:
     onSubscribe:
       summary: server response to subscribe command
       payload:
-        $ref: '#/components/schemas/ResponseOnSubscribeOnUnsubscribe'
+        $ref: '#/components/schemas/ResponseOnSubscribeModel'
     unsubscribe:
       summary: unsubscribe from a particular project_id
       payload:
-        type: object
-        required:
-          - unsubscribe
-        properties:
-          unsubscribe:
-            type: string
-            description: project uuid
+        $ref: '#/components/schemas/RequestUnSubscribeModel'
       examples:
         - name: unsubscribe example
           payload:
@@ -115,21 +103,45 @@ components:
     onUnsubscribe:
       summary: server response to unsubscribe command
       payload:
-        $ref: '#/components/schemas/ResponseOnSubscribeOnUnsubscribe'
+        $ref: '#/components/schemas/ResponseOnUnSubscribeModel'
     onTaskProgressUpdated:
       summary: task progress details
       payload:
         $ref: '#/components/schemas/TaskProgress'
 
   schemas:
-    ResponseOnSubscribeOnUnsubscribe:
+    RequestSubscribeModel:
+      type: object
+      required:
+        - subscribe
+      properties:
+        subscribe:
+          type: string
+          description: project uuid
+    RequestUnSubscribeModel:
+      type: object
+      required:
+        - unsubscribe
+      properties:
+        unsubscribe:
+          type: string
+          description: project uuid
+    ResponseOnSubscribeModel:
+      allOf:
+        - $ref: '#/components/schemas/RequestSubscribeModel'
+        - $ref: '#/components/schemas/ResponseBasicModel'
+    ResponseOnUnSubscribeModel:
+      allOf:
+        - $ref: '#/components/schemas/RequestUnSubscribeModel'
+        - $ref: '#/components/schemas/ResponseBasicModel'
+    ResponseBasicModel:
       type: object
       required:
         - status_code
         - status
       properties:
         status_code:
-          type: string
+          type: integer
           enum:
             - 200
             - 400

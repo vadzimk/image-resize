@@ -1,6 +1,9 @@
 import logging
 import time
 from functools import wraps
+from typing import Any, List, Union, Type
+
+from pydantic import BaseModel, TypeAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -23,3 +26,11 @@ def timethis(func):
 
     return wrapper
 
+
+def validate_message(message: Any, candidate_models: List[Type[BaseModel]]) -> Any:
+
+    """ Validate message against candidate_models """
+    union_type = candidate_models[0] if len(candidate_models) == 1 else Union[tuple(candidate_models)]
+    type_adapter = TypeAdapter(union_type)
+    response_model = type_adapter.validate_python(message)
+    return response_model
