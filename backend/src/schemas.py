@@ -1,20 +1,34 @@
-import uuid
-from typing import Dict
+from enum import Enum
+from typing import Dict, Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, UUID4, Strict
 
 
-class ProjectBase(BaseModel):  # TODO delete, not used in real endpoints
+class ProjectBase(BaseModel):
     filename: str
 
 
-class ProjectCreate(ProjectBase):  # TODO delete, not used in real endpoints
-    project_id: uuid.UUID
+class ProjectCreate(ProjectBase):
+    project_id: Annotated[UUID4, Strict(False)]
     upload_link: str
 
 
+class TaskState(str, Enum):
+    PROGRESS = "PROGRESS"
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    REVOKED = "REVOKED"
+
+
 class Project(BaseModel):
-    project_id: uuid.UUID
-    state: str  # TODO replace with celery states
+    project_id: Annotated[UUID4, Strict(False)]
+    state: TaskState
     versions: Dict[str, str]
 
+
+class SubscribeModel(BaseModel):
+    subscribe: Annotated[UUID4, Strict(False)]
+
+
+class UnSubscribeModel(BaseModel):
+    unsubscribe: Annotated[UUID4, Strict(False)]

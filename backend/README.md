@@ -1057,3 +1057,60 @@ This command generates HTML documentation from your asyncapi.yaml file and outpu
     You can serve the generated documentation using a static file server or integrate it into your FastAPI application using a route that serves the generated HTML files.
 
 By following these steps, you can effectively document and provide clear guidance on your WebSocket endpoints using AsyncAPI with FastAPI.
+
+
+---
+
+To validate the JSON sent to your WebSocket endpoint, you can use a JSON schema validation library like pydantic or jsonschema. Below, I'll provide an example using both methods:
+Using pydantic
+
+First, define your data model with pydantic.
+
+    Install pydantic:
+
+    ```bash
+
+    pip install pydantic
+    ```
+Define your data model:
+
+```python
+
+from pydantic import BaseModel, ValidationError
+
+class MyMessageModel(BaseModel):
+    # Define your schema here
+    attribute1: str
+    attribute2: int
+    # Add other attributes as necessary
+```
+Validate the incoming message:
+
+```python
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    Schema available in asyncapi docs (aysncapi.yaml, or asyncapi studio)
+    """
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            logger.debug(f"Path/ws Client message {data}")
+            try:
+                message = MyMessageModel.parse_raw(data)
+                await handle_message(websocket, message.dict())
+            except ValidationError as e:
+                logger.error(f"Validation error: {e}")
+                await websocket.send_text(f"Validation error: {e}")
+    except WebSocketDisconnect:
+        logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        ws_manager.disconnect(websocket)
+```
+
+---
+a definitions in your AsyncAPI document to validate WebSocket messages in a structured and automated way.

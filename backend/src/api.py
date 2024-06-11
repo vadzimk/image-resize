@@ -3,9 +3,13 @@ import logging
 import os.path
 import shutil
 import tempfile
+import traceback
 import uuid
+from typing import Union
 
-from fastapi import APIRouter, UploadFile, HTTPException
+from fastapi import APIRouter, UploadFile
+from fastapi.encoders import jsonable_encoder
+from pydantic import parse_obj_as
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -13,7 +17,7 @@ from .exceptions import AlreadySubscribed, NotInSubscriptions
 from .websocket_manager import ws_manager
 from .schemas import (ProjectCreate,
                       ProjectBase,
-                      Project)
+                      Project, SubscribeModel, UnSubscribeModel)
 from .services.minio import s3, get_presigned_url_put, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis
@@ -22,12 +26,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# TODO start background processing and return progress
-# save file.filename into the s3 storage
-# start background task for image processing
-# notify about task progress
-# https://docs.celeryq.dev/en/stable/userguide/signals.html#task-success
-# just register celery signal to call websocket
+# TODO remove this endpoint
 @router.post("/uploadfile", response_model=Project, status_code=status.HTTP_201_CREATED)
 @timethis
 def create_upload_file(file: UploadFile):
@@ -60,13 +59,16 @@ def create_upload_file(file: UploadFile):
 
         return {
             "project_id": project_id,
-            "state": "init",
+            "state": "PROGRESS",
             "versions": versions
         }
 
 
 @router.post("/images", response_model=ProjectCreate)
 def get_new_image_url(project_base: ProjectBase):
+    """
+    Generate a new image upload url
+    """
     project_id = uuid.uuid4()
     input_file_name_less, ext = project_base.filename.rsplit('.', 1)
     object_name_original = f"{str(project_id)}/{input_file_name_less}_original.{ext}"
@@ -80,34 +82,50 @@ def get_new_image_url(project_base: ProjectBase):
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    """
+    Schema available in asyncapi docs (aysncapi.yaml, or asyncapi studio)
+    """
     await ws_manager.connect(websocket)
     try:
         while True:
             data = await websocket.receive_text()
-            logger.debug(f"Path/ws Client message {data}")
-            message: dict = json.loads(data)  # TODO add schema validation
+            logger.info(f"Path/ws Client message {data}")
+            message: dict = json.loads(data)
             await handle_message(websocket, message)
     except WebSocketDisconnect:
         logger.info("Client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+    except Exception:
+        logger.error(f"websocket_endpoint: error:\n{traceback.format_exc()}")
     finally:
         ws_manager.disconnect(websocket)
 
 
 async def handle_message(websocket: WebSocket, message: dict):
-    response_message = message.copy()
+    """
+    validates websocket incoming messages and passes them to ws_manager
+    """
+    logger.info("Enter handle_message")
+    message_model = parse_obj_as(Union[SubscribeModel, UnSubscribeModel], message)
+    logger.info(f"handle_message message_model {message_model}")
+    response_message = message_model.model_dump()
     response_message.update({"status_code": "200", "status": "OK"})
     try:
-        if "subscribe" in message:
-            ws_manager.subscribe(websocket, message["subscribe"])
-        elif "unsubscribe" in message:
-            ws_manager.unsubscribe(websocket, message["unsubscribe"])
+        if isinstance(message_model, SubscribeModel):
+            logger.info(f"isinstance(message_model, SubscribeModel) {type(message_model.subscribe)}")
+            ws_manager.subscribe(websocket, str(message_model.subscribe))
+            logger.info(f"Subscribed")
+        elif isinstance(message_model, UnSubscribeModel):
+            logger.info(f"isinstance(message_model, UnSubscribeModel)")
+            ws_manager.unsubscribe(websocket, str(message_model.unsubscribe))
+        else:
+            raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")
     except (AlreadySubscribed, NotInSubscriptions) as err:
         response_message.update({"status_code": "400", "status": "Error", "message": str(err)})
     except Exception as err:
         response_message.update({"status_code": "400", "status": "Error", "message": "Unknown Server Error"})
         raise err
     finally:
-        await websocket.send_json(response_message)
+        await websocket.send_json(jsonable_encoder(response_message))
+        logger.info(f"handle_message: Done {jsonable_encoder(response_message)}")
+
 

@@ -14,7 +14,7 @@ from .utils import (upload_file,
 
 from ..src.schemas import Project
 
-
+# TODO remove test
 # @pytest.mark.skip
 def test_upload_file_endpoint_returns_Project():
     image_file_path = "./tests/photo.jpeg"
@@ -31,7 +31,7 @@ def test_upload_file_endpoint_returns_Project():
         s3.list_objects(bucket_name=bucket_name, prefix=str(project_response.project_id), recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
-
+# TODO remove test
 # @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_using_file_upload():
@@ -41,17 +41,19 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
     project_id = res.json().get("project_id")
 
     async def trigger_event():
-        await asyncio.sleep(1)  # wait for the client to subscribe
-        print("----------> triggered event")
+        await asyncio.sleep(0)  # wait for the client to subscribe
         cleanup_s3_objects(res.json().get("versions").values())
-
-    asyncio.create_task(trigger_event())
+        print("----------> triggered event")
 
     async with connect("ws://localhost:8000/ws") as websocket:
         await websocket.send(json.dumps({"subscribe": project_id}))
         res_confirmation = await websocket.recv()  # receive the confirmation message from websocket
         print("res_confirmation", res_confirmation)
         assert json.loads(res_confirmation).get("status") == "OK"
+
+        await asyncio.wait([
+            asyncio.create_task(trigger_event())
+        ])
         response = await websocket.recv()  # receive the next message from websocket (only the first message)
         # event triggered in the background somewhere here and the recv() unblocks
         message = json.loads(response)
@@ -60,7 +62,7 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
-
+# TODO think about breaking down this test into multiple to assert only one thing about expected behaviour
 # @pytest.mark.skip
 @pytest.mark.asyncio
 @pytest.mark.timeout(10)  # times out when versions are not removed
@@ -145,5 +147,4 @@ async def test_websocket_can_unsubscribe():
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
-# TODO implement Celery
-# websocket listen when the status changes and post to subscribers
+
