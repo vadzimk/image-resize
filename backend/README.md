@@ -962,3 +962,98 @@ Start the Celery worker:
 ```
 This setup allows Celery to use RabbitMQ as the message broker and Redis as the result backend. 
 When a task is complete, Celery sends a notification to RabbitMQ, and FastAPI listens to RabbitMQ to forward the message to the appropriate WebSocket client.
+
+--- 
+
+To document your WebSocket endpoints using AsyncAPI for a FastAPI server, follow these steps:
+
+    Install AsyncAPI Tools:
+        Install the AsyncAPI CLI tool to generate documentation and interact with AsyncAPI specifications.
+        You can install it using npm:
+
+        ```sh
+
+        npm install -g @asyncapi/cli
+        ```
+    Create AsyncAPI Specification:
+        Create a new AsyncAPI specification file (e.g., asyncapi.yaml).
+        Define the WebSocket channels, messages, and payloads based on your FastAPI WebSocket endpoints.
+
+    Integrate AsyncAPI with FastAPI:
+        Ensure your FastAPI WebSocket endpoints are well-defined and match the channels and messages in the AsyncAPI spec.
+
+    Generate Documentation:
+        Use the AsyncAPI CLI or other tools to generate HTML documentation from your asyncapi.yaml file.
+
+Example Setup
+
+1. FastAPI WebSocket Server:
+
+```python
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+app = FastAPI()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await websocket.send_json({"message": f"You said: {data}"})
+    except WebSocketDisconnect:
+        print("Client disconnected")
+```
+2. AsyncAPI Specification (asyncapi.yaml):
+
+```yaml
+
+asyncapi: '2.0.0'
+info:
+  title: FastAPI WebSocket API
+  version: '1.0.0'
+  description: WebSocket communication for FastAPI server.
+
+servers:
+  production:
+    url: ws://localhost:8000/ws
+    protocol: wss
+
+channels:
+  /ws:
+    description: WebSocket endpoint
+    subscribe:
+      summary: Receive messages from the client
+      message:
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Client message
+    publish:
+      summary: Send messages to the client
+      message:
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Server message
+```
+3. Generate Documentation:
+
+```sh
+
+asyncapi generate fromTemplate asyncapi.yaml @asyncapi/html-template -o ./docs
+```
+This command generates HTML documentation from your asyncapi.yaml file and outputs it to the ./docs directory.
+
+4. Serve Documentation:
+
+    You can serve the generated documentation using a static file server or integrate it into your FastAPI application using a route that serves the generated HTML files.
+
+By following these steps, you can effectively document and provide clear guidance on your WebSocket endpoints using AsyncAPI with FastAPI.

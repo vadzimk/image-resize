@@ -38,7 +38,7 @@ celery.config_from_object(CeleryConfig)
 celery.set_default()  # to use shared_task
 celery_logger = get_task_logger(__name__)
 
-queue_name = "task_notifications"
+queue_name = "task_notifications"  # also called routing_key or channel or event_type or event_name or topic or queue
 
 
 @contextmanager

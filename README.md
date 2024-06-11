@@ -14,6 +14,11 @@ Processed image sizes:
 - big_1920, 1920x1080, to_fit
 - d2500: 2500x2500, to_fit
 
+## Prerequisites
+- docker, docker-compose, node
+- https://www.asyncapi.com/docs/tools/cli/installation
+
+
 <details>
 <summary>Requirements document</summary>
 

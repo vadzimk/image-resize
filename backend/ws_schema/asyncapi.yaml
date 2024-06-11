@@ -1,0 +1,184 @@
+asyncapi: 3.0.0
+# https://github.com/asyncapi/cli/issues/629
+
+info:
+  title: task processing Websocket API
+  version: 1.0.0
+
+servers:
+  public:
+    host: ws://localhost:8000
+    protocol: wss
+
+channels:
+  ws:
+    address: /ws
+    description: all websocket messaging
+    servers:
+      - $ref: '#/servers/public'
+    messages:
+      subscribe:
+        $ref: '#/components/messages/subscribe'
+      onSubscribe:
+        $ref: '#/components/messages/onSubscribe'
+      unsubscribe:
+        $ref: '#/components/messages/unsubscribe'
+      onUnsubscribe:
+        $ref: '#/components/messages/onUnsubscribe'
+      onTaskProgressUpdated:
+        $ref: '#/components/messages/onTaskProgressUpdated'
+
+operations:
+  subscribeToProjectID:
+    title: client subscribe command
+    summary: client subscribes to receive events about project status
+    action: send
+    channel:
+      $ref: '#/channels/ws'
+    # NOTE the message reference points to the channel, not the components section.
+    # Else you get an error "Operation message does not belong to the specified channel"
+    messages:
+      - $ref: '#/channels/ws/messages/subscribe'
+    reply:
+      messages:
+        - $ref: '#/components/messages/onSubscribe'
+  onSubscribeToProjectID:
+    title: on client subscribe
+    summary: react to command client subscribes to receive messages about project
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/onSubscribe'
+  unsubscribeFromProjectID:
+    title: client unsubscribe command
+    summary: client unsubscribes from receiving events about project status
+    action: send
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/unsubscribe'
+    reply:
+      messages:
+        - $ref: '#/components/messages/onUnsubscribe'
+  onUnsubscribeFromProjectID:
+    title: on client unsubscribe
+    summary: react to command client unsubscribes from receiving messages about project
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/onUnsubscribe'
+  onTaskProgressUpdated:
+    title: on task progress updated
+    summary: event message notifies client that task progress updated
+    action: receive
+    channel:
+      $ref: '#/channels/ws'
+    messages:
+      - $ref: '#/channels/ws/messages/onTaskProgressUpdated'
+
+components:
+  messages:
+    subscribe:
+      summary: subscribe to a particular project_id
+      payload:
+        type: object
+        required:
+          - subscribe
+        properties:
+          subscribe:
+            type: string
+            description: project uuid
+      examples:
+        - name: subscribe example
+          payload:
+            subscribe: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
+    onSubscribe:
+      summary: server response to subscribe command
+      payload:
+        $ref: '#/components/schemas/ResponseOnSubscribeOnUnsubscribe'
+    unsubscribe:
+      summary: unsubscribe from a particular project_id
+      payload:
+        type: object
+        required:
+          - unsubscribe
+        properties:
+          unsubscribe:
+            type: string
+            description: project uuid
+      examples:
+        - name: unsubscribe example
+          payload:
+            unsubscribe: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
+    onUnsubscribe:
+      summary: server response to unsubscribe command
+      payload:
+        $ref: '#/components/schemas/ResponseOnSubscribeOnUnsubscribe'
+    onTaskProgressUpdated:
+      summary: task progress details
+      payload:
+        $ref: '#/components/schemas/TaskProgress'
+
+  schemas:
+    ResponseOnSubscribeOnUnsubscribe:
+      type: object
+      required:
+        - status_code
+        - status
+      properties:
+        status_code:
+          type: string
+          enum:
+            - 200
+            - 400
+        status:
+          type: string
+          enum:
+            - OK
+            - Error
+        message:
+          type: string
+          description: error message
+    TaskProgress:
+      type: object
+      required:
+        - project_id
+        - state
+        - versions
+      properties:
+        progress:
+          type: object
+          required:
+            - done
+            - type
+          properties:
+            done:
+              type: integer
+            total:
+              type: integer
+        project_id:
+          type: string
+        versions:
+          type: object
+          required:
+            - original
+          properties:
+            original:
+              type: string
+            thumb:
+              type: string
+            big_thumb:
+              type: string
+            big_1920:
+              type: string
+            d2500:
+              type: string
+        state:
+          enum:
+            - PROGRESS
+            - SUCCESS
+            - FAILURE
+            - REVOKED
+

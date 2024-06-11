@@ -97,8 +97,8 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
                 continue
             response = await websocket.recv()  # receive celery event on progress
             message = json.loads(response)
-            # print("# receive celery event on progress")
-            # pprint(message)
+            print("# receive celery event on progress")
+            pprint(message)
             assert message.get("state") == "PROGRESS"
             assert message.get("progress").get("done") == len(message.get("versions").keys()) - 1
 
@@ -107,12 +107,12 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
         print("Receiving last")
         response = await websocket.recv()  # get the next object message
         message = json.loads(response)
+        pprint(message)
         # verify state in websocket message
         assert message.get("project_id") == project_id
         assert message.get("state") == "SUCCESS"
         # verify versions in websocket message
         assert len(message.get("versions").items()) == 5
-        print(message)
 
     # check that versions are created in s3 by listing s3 objects
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))

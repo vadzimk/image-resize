@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(router)
 
-
+# TODO no need in publishing to the client websocket connections
 def listen_create_delete_s3_events_to_publish(loop: AbstractEventLoop):
     try:
         # publish create/delete events to WS manager
