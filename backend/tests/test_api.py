@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import uuid
 from pprint import pprint
 import pytest
 from websockets import connect
@@ -9,10 +10,11 @@ from .utils import (upload_file,
                     get_images_s3_upload_link_and_project_id,
                     cleanup_s3_objects,
                     Subscription,
-                    trigger_original_file_upload
+                    trigger_original_file_upload, cleanup_project
                     )
 
 from ..src.schemas import Project
+
 
 # TODO remove test
 # @pytest.mark.skip
@@ -27,9 +29,9 @@ def test_upload_file_endpoint_returns_Project():
     objects = project_response.versions.values()
     print("objects", objects)
     assert len(objects) == 5  # number of file versions
-    all_objects_in_project = list(
-        s3.list_objects(bucket_name=bucket_name, prefix=str(project_response.project_id), recursive=True))
-    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+    cleanup_project(project_response.project_id)
+
+
 
 # TODO remove test
 # @pytest.mark.skip
@@ -61,6 +63,7 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
         assert message['s3']['object']['key'].startswith(project_id)
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+
 
 # TODO think about breaking down this test into multiple to assert only one thing about expected behaviour
 # @pytest.mark.skip
@@ -148,3 +151,31 @@ async def test_websocket_can_unsubscribe():
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
+@pytest.mark.asyncio
+async def test_get_projects_id_returns_single_project(test_client):
+    image_file_path = "./tests/photo.jpeg"
+    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
+    print("project_id", project_id)
+    asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
+    async with Subscription(project_id) as websocket:
+        while True:
+            response = await websocket.recv()
+            message = json.loads(response)
+            if message.get("s3") or message.get("state") != "SUCCESS":
+                continue
+            else:
+                await websocket.send(json.dumps({"unsubscribe": project_id}))
+                break
+    res = test_client.get(f"/projects/{project_id}")
+    project_response = Project.model_validate_json(res.text)
+    assert str(project_response.project_id) == project_id
+    objects = project_response.versions.values()
+    assert len(objects) == 5  # number of file versions
+    assert project_response.state == "SUCCESS"
+    cleanup_project(project_response.project_id)
+
+
+
+def test_get_projects_returns_list_of_projects():
+    # must be paginated
+    pass

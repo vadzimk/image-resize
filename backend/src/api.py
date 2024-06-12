@@ -5,11 +5,9 @@ import shutil
 import tempfile
 import traceback
 import uuid
-from typing import Union
 
 from fastapi import APIRouter, UploadFile
 from fastapi.encoders import jsonable_encoder
-from pydantic import parse_obj_as
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -82,6 +80,24 @@ def get_new_image_url(project_base: ProjectBase):
     )
 
 
+# TODO next
+@router.get("/projects/{project_id}", response_model=Project, status_code=status.HTTP_200_OK)
+def get_project(project_id: uuid.UUID):
+    return {'project_id': project_id,
+            'state': 'SUCCESS',
+            'versions': {'big_1920': f'{project_id}/photo_big_1920.jpeg',
+                         'big_thumb': f'{project_id}/photo_big_thumb.jpeg',
+                         'd2500': f'{project_id}/photo_d2500.jpeg',
+                         'original': f'{project_id}/photo_original.jpeg',
+                         'thumb': f'{project_id}/photo_thumb.jpeg'}}
+
+
+# TODO next
+@router.get("/projects")
+def get_projects():
+    raise NotImplementedError()
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -130,6 +146,4 @@ async def handle_message(websocket: WebSocket, message: dict):
         await websocket.send_json(
             jsonable_encoder(
                 validate_message(response_message, [OnSubscribeModel, OnUnSubscribeModel])
-        ))
-
-
+            ))

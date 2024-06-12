@@ -2,15 +2,14 @@ import asyncio
 import json
 import os
 from typing import Tuple, List
-
-from fastapi.testclient import TestClient
-
-from ..src.schemas import ProjectCreate
 from minio.deleteobjects import DeleteObject
-from ..src.services.minio import s3, bucket_name
-import httpx
-from ..src.main import app
+from starlette.testclient import TestClient
 from websockets import connect
+import httpx
+
+from ..src.main import app
+from ..src.schemas import ProjectCreate
+from ..src.services.minio import s3, bucket_name
 
 client = TestClient(app)
 
@@ -41,6 +40,12 @@ def cleanup_s3_objects(objects: List[str]):
     if len(list(errors)) != 0:
         raise AssertionError
     print(f"cleanup_s3_objects: Done. Deleted {len(objects)} objects.")
+
+
+def cleanup_project(project_id):
+    all_objects_in_project = list(
+        s3.list_objects(bucket_name=bucket_name, prefix=str(project_id), recursive=True))
+    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
 
 
 def s3_upload_link_put_file(image_file_path, upload_link):
