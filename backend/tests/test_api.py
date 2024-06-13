@@ -13,7 +13,7 @@ from .utils import (upload_file,
                     trigger_original_file_upload, cleanup_project
                     )
 
-from ..src.schemas import Project
+from ..src.schemas import GetProjectSchema
 
 
 # TODO remove test
@@ -24,7 +24,7 @@ def test_upload_file_endpoint_returns_Project():
     print("response: ", end='')
     pprint(res.json())
     assert res.status_code == 201
-    project_response = Project.model_validate_json(res.text)
+    project_response = GetProjectSchema.model_validate_json(res.text)
     assert project_response.project_id is not None
     objects = project_response.versions.values()
     print("objects", objects)
@@ -167,7 +167,7 @@ async def test_get_projects_id_returns_single_project(test_client):
                 await websocket.send(json.dumps({"unsubscribe": project_id}))
                 break
     res = test_client.get(f"/projects/{project_id}")
-    project_response = Project.model_validate_json(res.text)
+    project_response = GetProjectSchema.model_validate_json(res.text)
     assert str(project_response.project_id) == project_id
     objects = project_response.versions.values()
     assert len(objects) == 5  # number of file versions

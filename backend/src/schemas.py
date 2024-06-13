@@ -5,11 +5,11 @@ from typing import Dict, Annotated, Optional
 from pydantic import BaseModel, UUID4, Strict
 
 
-class ProjectBase(BaseModel):
+class CreateProjectSchema(BaseModel):
     filename: str
 
 
-class ProjectCreate(ProjectBase):
+class ProjectCreatedSchema(CreateProjectSchema):
     project_id: Annotated[UUID4, Strict(False)]
     upload_link: str
 
@@ -29,7 +29,7 @@ class ImageVersion(str, Enum):
     d2500 = "d2500"
 
 
-class Project(BaseModel):
+class GetProjectSchema(BaseModel):
     project_id: Annotated[UUID4, Strict(False)]
     state: TaskState
     versions: Dict[ImageVersion, str]
@@ -41,25 +41,25 @@ class ProgressDetail:
     total: int
 
 
-class ProjectProgressModel(Project):
+class ProjectProgressSchema(GetProjectSchema):
     progress: ProgressDetail
 
 
-class SubscribeModel(BaseModel):
+class SubscribeSchema(BaseModel):
     subscribe: Annotated[UUID4, Strict(False)]
 
 
-class UnSubscribeModel(BaseModel):
+class UnSubscribeSchema(BaseModel):
     unsubscribe: Annotated[UUID4, Strict(False)]
 
 
-class OnSubscribeModel(SubscribeModel):
+class OnSubscribeSchema(SubscribeSchema):
     status_code: int
     status: str
     message: Optional[str] = None
 
 
-class OnUnSubscribeModel(UnSubscribeModel):
+class OnUnSubscribeSchema(UnSubscribeSchema):
     status_code: int
     status: str
     message: Optional[str] = None

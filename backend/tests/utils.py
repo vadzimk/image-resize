@@ -8,7 +8,7 @@ from websockets import connect
 import httpx
 
 from ..src.main import app
-from ..src.schemas import ProjectCreate
+from ..src.schemas import ProjectCreatedSchema
 from ..src.services.minio import s3, bucket_name
 
 client = TestClient(app)
@@ -25,7 +25,7 @@ def get_images_s3_upload_link_and_project_id(image_file_path) -> Tuple[str, str]
     assert os.path.exists(image_file_path)
     filename = os.path.basename(image_file_path)
     res = client.post("/images", json={"filename": filename})
-    project_response = ProjectCreate.model_validate_json(res.text)
+    project_response = ProjectCreatedSchema.model_validate_json(res.text)
     assert project_response.upload_link.startswith('http')
     assert project_response.filename == filename
     return project_response.upload_link, str(project_response.project_id)

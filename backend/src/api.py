@@ -11,13 +11,15 @@ from fastapi.encoders import jsonable_encoder
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from .repository.projects_repository import ProjectsRepository
+from .services.projects_service import ProjectsService
 from .exceptions import AlreadySubscribed, NotInSubscriptions
 from .websocket_manager import ws_manager
-from .schemas import (ProjectCreate,
-                      ProjectBase,
-                      Project,
-                      SubscribeModel,
-                      UnSubscribeModel, OnSubscribeModel, OnUnSubscribeModel)
+from .schemas import (ProjectCreatedSchema,
+                      CreateProjectSchema,
+                      GetProjectSchema,
+                      SubscribeSchema,
+                      UnSubscribeSchema, OnSubscribeSchema, OnUnSubscribeSchema)
 from .services.minio import s3, get_presigned_url_put, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis, validate_message
@@ -27,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 # TODO remove this endpoint
-@router.post("/uploadfile", response_model=Project, status_code=status.HTTP_201_CREATED)
+@router.post("/uploadfile", response_model=GetProjectSchema, status_code=status.HTTP_201_CREATED)
 @timethis
 def create_upload_file(file: UploadFile):
     project_id = str(uuid.uuid4())
@@ -64,8 +66,8 @@ def create_upload_file(file: UploadFile):
         }
 
 
-@router.post("/images", response_model=ProjectCreate)
-def get_new_image_url(project_base: ProjectBase):
+@router.post("/images", response_model=ProjectCreatedSchema)
+def get_new_image_url(project_base: CreateProjectSchema):
     """
     Generate a new image upload url
     """
@@ -73,7 +75,7 @@ def get_new_image_url(project_base: ProjectBase):
     input_file_name_less, ext = project_base.filename.rsplit('.', 1)
     object_name_original = f"{str(project_id)}/{input_file_name_less}_original.{ext}"
     url = get_presigned_url_put(object_name_original)
-    return ProjectCreate(
+    return ProjectCreatedSchema(
         filename=project_base.filename,
         project_id=project_id,
         upload_link=url
@@ -81,15 +83,13 @@ def get_new_image_url(project_base: ProjectBase):
 
 
 # TODO next
-@router.get("/projects/{project_id}", response_model=Project, status_code=status.HTTP_200_OK)
+@router.get("/projects/{project_id}", response_model=GetProjectSchema, status_code=status.HTTP_200_OK)
 def get_project(project_id: uuid.UUID):
-    return {'project_id': project_id,
-            'state': 'SUCCESS',
-            'versions': {'big_1920': f'{project_id}/photo_big_1920.jpeg',
-                         'big_thumb': f'{project_id}/photo_big_thumb.jpeg',
-                         'd2500': f'{project_id}/photo_d2500.jpeg',
-                         'original': f'{project_id}/photo_original.jpeg',
-                         'thumb': f'{project_id}/photo_thumb.jpeg'}}
+    repository = ProjectsRepository()
+    projects_service = ProjectsService(repository)
+    project = projects_service.get_project(project_id)
+    return project.dict()
+
 
 
 # TODO next
@@ -123,17 +123,17 @@ async def handle_message(websocket: WebSocket, message: dict):
     validates websocket incoming messages and passes them to ws_manager
     """
     logger.debug("Enter handle_message")
-    message_model = validate_message(message, [SubscribeModel, UnSubscribeModel])
+    message_model = validate_message(message, [SubscribeSchema, UnSubscribeSchema])
     logger.debug(f"handle_message message_model {message_model}")
     response_message = message_model.model_dump()
     response_message.update({"status_code": 200, "status": "OK"})
     try:
-        if isinstance(message_model, SubscribeModel):
-            logger.info(f"isinstance(message_model, SubscribeModel) {type(message_model.subscribe)}")
+        if isinstance(message_model, SubscribeSchema):
+            logger.info(f"isinstance(message_model, SubscribeSchema) {type(message_model.subscribe)}")
             ws_manager.subscribe(websocket, str(message_model.subscribe))
             logger.info(f"Subscribed")
-        elif isinstance(message_model, UnSubscribeModel):
-            logger.info(f"isinstance(message_model, UnSubscribeModel)")
+        elif isinstance(message_model, UnSubscribeSchema):
+            logger.info(f"isinstance(message_model, UnSubscribeSchema)")
             ws_manager.unsubscribe(websocket, str(message_model.unsubscribe))
         else:
             raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")
@@ -145,5 +145,5 @@ async def handle_message(websocket: WebSocket, message: dict):
     finally:
         await websocket.send_json(
             jsonable_encoder(
-                validate_message(response_message, [OnSubscribeModel, OnUnSubscribeModel])
+                validate_message(response_message, [OnSubscribeSchema, OnUnSubscribeSchema])
             ))

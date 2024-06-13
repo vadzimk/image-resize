@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette.websockets import WebSocket
 
 from .utils import validate_message
-from .schemas import ProjectProgressModel, Project
+from .schemas import ProjectProgressSchema, GetProjectSchema
 from .exceptions import AlreadySubscribed, NotInSubscriptions
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class WebsocketManager:
                 if message.get("project_id") == sub.key_prefix:
                     await conn.send_json(
                         jsonable_encoder(
-                            validate_message(message, [ProjectProgressModel, Project])
+                            validate_message(message, [ProjectProgressSchema, GetProjectSchema])
                         ))
                     break
 
