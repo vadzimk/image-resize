@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-minio.start:
+docker.up:
 	cd backend \
 	&& set -o allexport \
 	&& source .env \

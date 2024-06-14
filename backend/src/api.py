@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from .repository.uow import UnitOfWork
 from .repository.projects_repository import ProjectsRepository
 from .services.projects_service import ProjectsService
 from .exceptions import AlreadySubscribed, NotInSubscriptions
@@ -19,8 +20,11 @@ from .schemas import (ProjectCreatedSchema,
                       CreateProjectSchema,
                       GetProjectSchema,
                       SubscribeSchema,
-                      UnSubscribeSchema, OnSubscribeSchema, OnUnSubscribeSchema)
-from .services.minio import s3, get_presigned_url_put, bucket_name
+                      UnSubscribeSchema,
+                      OnSubscribeSchema,
+                      OnUnSubscribeSchema,
+                      )
+from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 from .utils import timethis, validate_message
 
@@ -66,30 +70,32 @@ def create_upload_file(file: UploadFile):
         }
 
 
-@router.post("/images", response_model=ProjectCreatedSchema)
-def get_new_image_url(project_base: CreateProjectSchema):
+@router.post("/images", response_model=ProjectCreatedSchema, status_code=status.HTTP_201_CREATED)
+async def get_new_image_url(create_project: CreateProjectSchema):
     """
     Generate a new image upload url
     """
-    project_id = uuid.uuid4()
-    input_file_name_less, ext = project_base.filename.rsplit('.', 1)
-    object_name_original = f"{str(project_id)}/{input_file_name_less}_original.{ext}"
-    url = get_presigned_url_put(object_name_original)
+    async with UnitOfWork() as uow:
+        repository = ProjectsRepository(uow.session)
+        project_service = ProjectsService(repository)
+        project_dom = await project_service.create_project(create_project)
+        await uow.commit()
+
     return ProjectCreatedSchema(
-        filename=project_base.filename,
-        project_id=project_id,
-        upload_link=url
+        filename=create_project.filename,
+        project_id=project_dom.project_id,
+        upload_link=project_dom.pre_signed_url
     )
 
 
 # TODO next
 @router.get("/projects/{project_id}", response_model=GetProjectSchema, status_code=status.HTTP_200_OK)
-def get_project(project_id: uuid.UUID):
-    repository = ProjectsRepository()
-    projects_service = ProjectsService(repository)
-    project = projects_service.get_project(project_id)
-    return project.dict()
-
+async def get_project(project_id: uuid.UUID):
+    async with UnitOfWork() as uow:
+        repository = ProjectsRepository(uow.session)
+        projects_service = ProjectsService(repository)
+        project = await projects_service.get_project(project_id)
+        return GetProjectSchema(project_id=project.project_id, state=project.state, versions=project.versions)
 
 
 # TODO next
@@ -129,11 +135,11 @@ async def handle_message(websocket: WebSocket, message: dict):
     response_message.update({"status_code": 200, "status": "OK"})
     try:
         if isinstance(message_model, SubscribeSchema):
-            logger.info(f"isinstance(message_model, SubscribeSchema) {type(message_model.subscribe)}")
+            logger.debug(f"isinstance(message_model, SubscribeSchema) {type(message_model.subscribe)}")
             ws_manager.subscribe(websocket, str(message_model.subscribe))
-            logger.info(f"Subscribed")
+            logger.debug(f"Subscribed")
         elif isinstance(message_model, UnSubscribeSchema):
-            logger.info(f"isinstance(message_model, UnSubscribeSchema)")
+            logger.debug(f"isinstance(message_model, UnSubscribeSchema)")
             ws_manager.unsubscribe(websocket, str(message_model.unsubscribe))
         else:
             raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")

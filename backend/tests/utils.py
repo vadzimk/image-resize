@@ -3,6 +3,7 @@ import json
 import os
 from typing import Tuple, List
 from minio.deleteobjects import DeleteObject
+from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.testclient import TestClient
 from websockets import connect
 import httpx
@@ -42,10 +43,20 @@ def cleanup_s3_objects(objects: List[str]):
     print(f"cleanup_s3_objects: Done. Deleted {len(objects)} objects.")
 
 
-def cleanup_project(project_id):
+async def cleanup_mongodb(project_id):
+    mongo_client = AsyncIOMotorClient(os.getenv("MONGO_DETAILS", "mongodb://localhost:27017"))
+    session = await mongo_client.start_session()
+    projects_database = session.client["projects_database"]  # TODO replace by env
+    projects_collection = projects_database["projects"]
+    await projects_collection.delete_one({"project_id": project_id})
+    await session.end_session()
+
+
+async def cleanup_project(project_id):
     all_objects_in_project = list(
         s3.list_objects(bucket_name=bucket_name, prefix=str(project_id), recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+    await cleanup_mongodb(project_id)
 
 
 def s3_upload_link_put_file(image_file_path, upload_link):

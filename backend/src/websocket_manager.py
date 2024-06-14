@@ -45,11 +45,11 @@ class WebsocketManager:
     # TODO make private - only used for testing
     async def broadcast(self, message: dict):  # sends all messages to all connections
         connections = list(self.connection_subscriptions.keys())
-        logger.info(f"Entered async broadcast, connections_length: {len(connections)}: {connections}")
+        logger.debug(f"Entered async broadcast, connections_length: {len(connections)}: {connections}")
         for conn in connections:
             try:
                 await conn.send_json(message)
-                logger.info(f"Sent Broadcast to {conn} : {message}")
+                logger.debug(f"Sent Broadcast to {conn} : {message}")
             except Exception as e:
                 logger.error(e)
                 raise e

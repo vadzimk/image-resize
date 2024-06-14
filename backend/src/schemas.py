@@ -15,6 +15,8 @@ class ProjectCreatedSchema(CreateProjectSchema):
 
 
 class TaskState(str, Enum):
+    INITIATE = "INITIATE"
+    GOTORIGINAL = "GOTORIGINAL"
     PROGRESS = "PROGRESS"
     SUCCESS = "SUCCESS"
     FAILURE = "FAILURE"
@@ -27,6 +29,15 @@ class ImageVersion(str, Enum):
     big_thumb = "big_thumb"
     big_1920 = "big_1920"
     d2500 = "d2500"
+
+
+# @dataclass
+# class ImageVersions:
+#     original: str
+#     thumb: str
+#     big_thumb: str
+#     big_1920: str
+#     d2500: str
 
 
 class GetProjectSchema(BaseModel):
@@ -63,4 +74,3 @@ class OnUnSubscribeSchema(UnSubscribeSchema):
     status_code: int
     status: str
     message: Optional[str] = None
-

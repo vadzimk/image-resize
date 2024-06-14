@@ -15,6 +15,7 @@ pytest-timeout = "*"
 redis = "*"
 flower = "*"
 pika = "*"
+motor = "*"
 
 [dev-packages]
 

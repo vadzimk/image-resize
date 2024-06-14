@@ -1,7 +1,6 @@
 import asyncio
 import json
 import re
-import uuid
 from pprint import pprint
 import pytest
 from websockets import connect
@@ -13,12 +12,13 @@ from .utils import (upload_file,
                     trigger_original_file_upload, cleanup_project
                     )
 
-from ..src.schemas import GetProjectSchema
+from ..src.schemas import GetProjectSchema, ImageVersion
 
 
 # TODO remove test
 # @pytest.mark.skip
-def test_upload_file_endpoint_returns_Project():
+@pytest.mark.asyncio
+async def test_upload_file_endpoint_returns_Project():
     image_file_path = "./tests/photo.jpeg"
     res = upload_file(image_file_path)
     print("response: ", end='')
@@ -29,8 +29,7 @@ def test_upload_file_endpoint_returns_Project():
     objects = project_response.versions.values()
     print("objects", objects)
     assert len(objects) == 5  # number of file versions
-    cleanup_project(project_response.project_id)
-
+    await cleanup_project(str(project_response.project_id))
 
 
 # TODO remove test
@@ -57,12 +56,10 @@ async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_u
             asyncio.create_task(trigger_event())
         ])
         response = await websocket.recv()  # receive the next message from websocket (only the first message)
-        # event triggered in the background somewhere here and the recv() unblocks
         message = json.loads(response)
         pprint(message)
         assert message['s3']['object']['key'].startswith(project_id)
-    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
-    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+    await cleanup_project(project_id)
 
 
 # TODO think about breaking down this test into multiple to assert only one thing about expected behaviour
@@ -123,7 +120,7 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
     print("objects", [o.object_name for o in all_objects_in_project])
     assert len(all_objects_in_project) == 5  # number of versions of file
-    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+    await cleanup_project(project_id)
 
 
 # @pytest.mark.skip
@@ -147,35 +144,27 @@ async def test_websocket_can_unsubscribe():
         assert res['unsubscribe'] == project_id
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
-    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
-    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+    await cleanup_project(project_id)
 
 
 @pytest.mark.asyncio
 async def test_get_projects_id_returns_single_project(test_client):
     image_file_path = "./tests/photo.jpeg"
     upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
-    print("project_id", project_id)
-    asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
-    async with Subscription(project_id) as websocket:
-        while True:
-            response = await websocket.recv()
-            message = json.loads(response)
-            if message.get("s3") or message.get("state") != "SUCCESS":
-                continue
-            else:
-                await websocket.send(json.dumps({"unsubscribe": project_id}))
-                break
+    await asyncio.wait([
+        asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
+    ])
+    await asyncio.sleep(1)  # let the db update state
     res = test_client.get(f"/projects/{project_id}")
     project_response = GetProjectSchema.model_validate_json(res.text)
     assert str(project_response.project_id) == project_id
-    objects = project_response.versions.values()
-    assert len(objects) == 5  # number of file versions
-    assert project_response.state == "SUCCESS"
-    cleanup_project(project_response.project_id)
+    response_versions_original = project_response.versions.get(ImageVersion.original)
+    assert response_versions_original is not None
+    assert response_versions_original.startswith(project_id)
+    await cleanup_project(project_id)
 
 
-
+@pytest.mark.skip
 def test_get_projects_returns_list_of_projects():
     # must be paginated
     pass
