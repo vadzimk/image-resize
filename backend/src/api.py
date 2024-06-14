@@ -22,7 +22,7 @@ from .schemas import (ProjectCreatedSchema,
                       SubscribeSchema,
                       UnSubscribeSchema,
                       OnSubscribeSchema,
-                      OnUnSubscribeSchema,
+                      OnUnSubscribeSchema, GetProjectsSchema,
                       )
 from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
@@ -32,42 +32,42 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# TODO remove this endpoint
-@router.post("/uploadfile", response_model=GetProjectSchema, status_code=status.HTTP_201_CREATED)
-@timethis
-def create_upload_file(file: UploadFile):
-    project_id = str(uuid.uuid4())
-    input_file_name_less, ext = file.filename.rsplit('.', 1)
-    with tempfile.NamedTemporaryFile(delete=True) as temp_input_file:
-        object_name_original = f"{project_id}/{input_file_name_less}_original.{ext}"
-
-        # need to make a copy because this is not working
-        # s3.put_object("images", object_name=object_name_original, data=file.file, length=file.size)
-        shutil.copyfileobj(file.file, temp_input_file.file)
-        s3.fput_object(bucket_name=bucket_name, object_name=object_name_original, file_path=temp_input_file.name)
-
-        sizes = {
-            "thumb": (150, 120),
-            "big_thumb": (700, 700),
-            "big_1920": (1920, 1080),
-            "d2500": (2500, 2500)
-        }
-        versions = {"original": object_name_original}
-        with tempfile.TemporaryDirectory() as temp_dir:
-            for size_key, size_value in sizes.items():
-                destination_name = f"{input_file_name_less}_{size_key}.{ext}"
-                destination_temp_path = os.path.join(temp_dir, destination_name)
-                resize_with_aspect_ratio(temp_input_file, destination_temp_path, size_value)  # must use temporary file
-                object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
-                s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
-                versions[size_key] = object_name
-        # will close temp_input_file
-
-        return {
-            "project_id": project_id,
-            "state": "PROGRESS",
-            "versions": versions
-        }
+# # TODO remove this endpoint
+# @router.post("/uploadfile", response_model=GetProjectSchema, status_code=status.HTTP_201_CREATED)
+# @timethis
+# def create_upload_file(file: UploadFile):
+#     project_id = str(uuid.uuid4())
+#     input_file_name_less, ext = file.filename.rsplit('.', 1)
+#     with tempfile.NamedTemporaryFile(delete=True) as temp_input_file:
+#         object_name_original = f"{project_id}/{input_file_name_less}_original.{ext}"
+#
+#         # need to make a copy because this is not working
+#         # s3.put_object("images", object_name=object_name_original, data=file.file, length=file.size)
+#         shutil.copyfileobj(file.file, temp_input_file.file)
+#         s3.fput_object(bucket_name=bucket_name, object_name=object_name_original, file_path=temp_input_file.name)
+#
+#         sizes = {
+#             "thumb": (150, 120),
+#             "big_thumb": (700, 700),
+#             "big_1920": (1920, 1080),
+#             "d2500": (2500, 2500)
+#         }
+#         versions = {"original": object_name_original}
+#         with tempfile.TemporaryDirectory() as temp_dir:
+#             for size_key, size_value in sizes.items():
+#                 destination_name = f"{input_file_name_less}_{size_key}.{ext}"
+#                 destination_temp_path = os.path.join(temp_dir, destination_name)
+#                 resize_with_aspect_ratio(temp_input_file, destination_temp_path, size_value)  # must use temporary file
+#                 object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
+#                 s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
+#                 versions[size_key] = object_name
+#         # will close temp_input_file
+#
+#         return {
+#             "project_id": project_id,
+#             "state": "PROGRESS",
+#             "versions": versions
+#         }
 
 
 @router.post("/images", response_model=ProjectCreatedSchema, status_code=status.HTTP_201_CREATED)
@@ -88,7 +88,6 @@ async def get_new_image_url(create_project: CreateProjectSchema):
     )
 
 
-# TODO next
 @router.get("/projects/{project_id}", response_model=GetProjectSchema, status_code=status.HTTP_200_OK)
 async def get_project(project_id: uuid.UUID):
     async with UnitOfWork() as uow:
@@ -100,8 +99,18 @@ async def get_project(project_id: uuid.UUID):
 
 # TODO next
 @router.get("/projects")
-def get_projects():
-    raise NotImplementedError()
+async def get_projects(skip: int = 0, limit: int = 10):
+    async with UnitOfWork() as uow:
+        repository = ProjectsRepository(uow.session)
+        project_service = ProjectsService(repository)
+        projects = await project_service.list_projects(skip=skip, limit=limit)
+        return GetProjectsSchema(
+            projects=[
+                GetProjectSchema(
+                    project_id=proj.project_id,
+                    state=proj.state,
+                    versions=proj.versions
+                ) for proj in projects])
 
 
 @router.websocket("/ws")

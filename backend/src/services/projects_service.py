@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import List, Optional, Tuple, Any, Dict
 
 from .minio import get_presigned_url_put
 from ..schemas import CreateProjectSchema
@@ -25,3 +26,10 @@ class ProjectsService:
 
     async def update_project(self, project_id: str, update: dict) -> ProjectDOM:
         return await self.projects_repository.update(project_id, update)
+
+    async def list_projects(self,
+                            skip: Optional[int] = 0,
+                            limit: Optional[int] = None,
+                            sort: Optional[List[Tuple[str, Any]]] = None,
+                            filters: Optional[Dict[str, Any]] = None) -> List[ProjectDOM]:
+        return await self.projects_repository.list(skip=skip, limit=limit, sort=sort, filters=filters)

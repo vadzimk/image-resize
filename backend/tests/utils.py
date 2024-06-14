@@ -32,6 +32,21 @@ def get_images_s3_upload_link_and_project_id(image_file_path) -> Tuple[str, str]
     return project_response.upload_link, str(project_response.project_id)
 
 
+async def trigger_original_file_upload(image_file_path, upload_link):
+    await asyncio.sleep(1)  # wait for client to subscribe
+    res = s3_upload_link_put_file(image_file_path, upload_link)
+    assert res.status_code == 200
+
+
+async def upload_original_s3():
+    image_file_path = "./tests/photo.jpeg"
+    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
+    await asyncio.wait([
+        asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
+    ])
+    return project_id
+
+
 def cleanup_s3_objects(objects: List[str]):
     """
     deletes s3 objects form minio storage
@@ -84,9 +99,3 @@ class Subscription:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.websocket.close()
-
-
-async def trigger_original_file_upload(image_file_path, upload_link):
-    await asyncio.sleep(1)  # wait for client to subscribe
-    res = s3_upload_link_put_file(image_file_path, upload_link)
-    assert res.status_code == 200

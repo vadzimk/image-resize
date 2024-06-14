@@ -1,7 +1,7 @@
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple, Any, Dict, Optional
 
 from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo import ReturnDocument
@@ -16,19 +16,23 @@ logger = logging.getLogger(__name__)
 class ProjectsRepositoryInterface(ABC):
     @abstractmethod
     async def add(self, project_id: uuid.UUID, pre_signed_url: str) -> ProjectDOM:
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     async def get(self, project_id) -> ProjectDOM | None:
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     async def update(self, project_id: str, update: dict) -> ProjectDOM:
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
-    def list(self) -> List[ProjectDOM]:
-        pass
+    async def list(self,
+                   skip: Optional[int] = 0,
+                   limit: Optional[int] = None,
+                   sort: Optional[List[Tuple[str, Any]]] = None,
+                   filters: Optional[Dict[str, Any]] = None) -> List[ProjectDOM]:
+        raise NotImplementedError()
 
 
 class ProjectsRepository(ProjectsRepositoryInterface):
@@ -37,8 +41,18 @@ class ProjectsRepository(ProjectsRepositoryInterface):
         self.projects_database = self.session.client["projects_database"]  # creates if not exist TODO replace by env
         self.projects_collection = self.projects_database["projects"]  # creates if not exist
 
-    def list(self) -> List[ProjectDOM]:
-        pass
+    async def list(self,
+                   skip: Optional[int] = 0,
+                   limit: Optional[int] = None,
+                   sort: Optional[List[Tuple[str, Any]]] = None,
+                   filters: Optional[Dict[str, Any]] = None) -> List[ProjectDOM]:
+        limit = limit if limit is not None else 10
+        filters = filters if filters is not None else {}
+        cursor = self.projects_collection.find(filters)
+        if sort:
+            cursor = cursor.sort(sort)
+        documents = await cursor.skip(skip).limit(limit).to_list(limit)
+        return [ProjectDOM(**(doc.pop("_id") and doc)) for doc in documents]
 
     async def add(self, project_id: uuid.UUID, pre_signed_url: str) -> ProjectDOM:
         project = ProjectDOM(project_id=project_id,
@@ -67,4 +81,3 @@ class ProjectsRepository(ProjectsRepositoryInterface):
         document.pop("_id")
         logger.debug(f"ProjectsRepository.get:document: {document}")
         return ProjectDOM(**document)
-

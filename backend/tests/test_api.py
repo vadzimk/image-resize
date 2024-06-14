@@ -9,57 +9,57 @@ from .utils import (upload_file,
                     get_images_s3_upload_link_and_project_id,
                     cleanup_s3_objects,
                     Subscription,
-                    trigger_original_file_upload, cleanup_project
+                    trigger_original_file_upload, cleanup_project, upload_original_s3
                     )
 
 from ..src.schemas import GetProjectSchema, ImageVersion
 
 
-# TODO remove test
-# @pytest.mark.skip
-@pytest.mark.asyncio
-async def test_upload_file_endpoint_returns_Project():
-    image_file_path = "./tests/photo.jpeg"
-    res = upload_file(image_file_path)
-    print("response: ", end='')
-    pprint(res.json())
-    assert res.status_code == 201
-    project_response = GetProjectSchema.model_validate_json(res.text)
-    assert project_response.project_id is not None
-    objects = project_response.versions.values()
-    print("objects", objects)
-    assert len(objects) == 5  # number of file versions
-    await cleanup_project(str(project_response.project_id))
+# # TODO remove test
+# # @pytest.mark.skip
+# @pytest.mark.asyncio
+# async def test_upload_file_endpoint_returns_Project():
+#     image_file_path = "./tests/photo.jpeg"
+#     res = upload_file(image_file_path)
+#     print("response: ", end='')
+#     pprint(res.json())
+#     assert res.status_code == 201
+#     project_response = GetProjectSchema.model_validate_json(res.text)
+#     assert project_response.project_id is not None
+#     objects = project_response.versions.values()
+#     print("objects", objects)
+#     assert len(objects) == 5  # number of file versions
+#     await cleanup_project(str(project_response.project_id))
+#
 
-
-# TODO remove test
-# @pytest.mark.skip
-@pytest.mark.asyncio
-async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_using_file_upload():
-    """ subscribe events are create and delete object """
-    image_file_path = "./tests/photo.jpeg"
-    res = upload_file(image_file_path)
-    project_id = res.json().get("project_id")
-
-    async def trigger_event():
-        await asyncio.sleep(0)  # wait for the client to subscribe
-        cleanup_s3_objects(res.json().get("versions").values())
-        print("----------> triggered event")
-
-    async with connect("ws://localhost:8000/ws") as websocket:
-        await websocket.send(json.dumps({"subscribe": project_id}))
-        res_confirmation = await websocket.recv()  # receive the confirmation message from websocket
-        print("res_confirmation", res_confirmation)
-        assert json.loads(res_confirmation).get("status") == "OK"
-
-        await asyncio.wait([
-            asyncio.create_task(trigger_event())
-        ])
-        response = await websocket.recv()  # receive the next message from websocket (only the first message)
-        message = json.loads(response)
-        pprint(message)
-        assert message['s3']['object']['key'].startswith(project_id)
-    await cleanup_project(project_id)
+# # TODO remove test
+# # @pytest.mark.skip
+# @pytest.mark.asyncio
+# async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_using_file_upload():
+#     """ subscribe events are create and delete object """
+#     image_file_path = "./tests/photo.jpeg"
+#     res = upload_file(image_file_path)
+#     project_id = res.json().get("project_id")
+#
+#     async def trigger_event():
+#         await asyncio.sleep(0)  # wait for the client to subscribe
+#         cleanup_s3_objects(res.json().get("versions").values())
+#         print("----------> triggered event")
+#
+#     async with connect("ws://localhost:8000/ws") as websocket:
+#         await websocket.send(json.dumps({"subscribe": project_id}))
+#         res_confirmation = await websocket.recv()  # receive the confirmation message from websocket
+#         print("res_confirmation", res_confirmation)
+#         assert json.loads(res_confirmation).get("status") == "OK"
+#
+#         await asyncio.wait([
+#             asyncio.create_task(trigger_event())
+#         ])
+#         response = await websocket.recv()  # receive the next message from websocket (only the first message)
+#         message = json.loads(response)
+#         pprint(message)
+#         assert message['s3']['object']['key'].startswith(project_id)
+#     await cleanup_project(project_id)
 
 
 # TODO think about breaking down this test into multiple to assert only one thing about expected behaviour
@@ -71,7 +71,6 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     image_file_path = "./tests/photo.jpeg"
     upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
     print("project_id", project_id)
-
     asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
 
     versions = ["original", "big_thumb", "thumb", "big_1920", "d2500"]
@@ -126,12 +125,11 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
 # @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_websocket_can_unsubscribe():
-    # post original
     image_file_path = "./tests/photo.jpeg"
     upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
     print("project_id", project_id)
-
     asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
+
     async with Subscription(project_id) as websocket:
         response = await websocket.recv()
         message = json.loads(response)
@@ -147,13 +145,10 @@ async def test_websocket_can_unsubscribe():
     await cleanup_project(project_id)
 
 
+# @pytest.mark.skip
 @pytest.mark.asyncio
 async def test_get_projects_id_returns_single_project(test_client):
-    image_file_path = "./tests/photo.jpeg"
-    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
-    await asyncio.wait([
-        asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
-    ])
+    project_id = await upload_original_s3()
     await asyncio.sleep(1)  # let the db update state
     res = test_client.get(f"/projects/{project_id}")
     project_response = GetProjectSchema.model_validate_json(res.text)
@@ -164,7 +159,21 @@ async def test_get_projects_id_returns_single_project(test_client):
     await cleanup_project(project_id)
 
 
-@pytest.mark.skip
-def test_get_projects_returns_list_of_projects():
-    # must be paginated
-    pass
+# @pytest.mark.skip
+@pytest.mark.asyncio
+async def test_get_projects_returns_list_of_projects(test_client):
+    project_ids = []
+    for _ in range(5):
+        project_id = await upload_original_s3()
+        project_ids.append(project_id)
+    await asyncio.sleep(1)  # let db update state
+
+    res = test_client.get(f"/projects", params={"limit": 5, "skip": 3}).json()
+    projects = res.get("projects")
+    print("projects:=> ", projects)
+    print("len projects:=> ", len(projects))
+    assert len(projects) == 2
+    for project_id in project_ids:
+        await cleanup_project(project_id)
+
+# TODO make test setup and teardown properly

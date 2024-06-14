@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Annotated, Optional
+from typing import Dict, Annotated, Optional, List
 
 from pydantic import BaseModel, UUID4, Strict
 
@@ -44,6 +44,10 @@ class GetProjectSchema(BaseModel):
     project_id: Annotated[UUID4, Strict(False)]
     state: TaskState
     versions: Dict[ImageVersion, str]
+
+
+class GetProjectsSchema(BaseModel):
+    projects: List[GetProjectSchema]
 
 
 @dataclass
