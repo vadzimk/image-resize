@@ -11,3 +11,8 @@ class NotInSubscriptions(Exception):
 class ProjectNotFoundError(Exception):
     def __init__(self, project_id):
         super(ProjectNotFoundError, self).__init__(f"Project with id {project_id} not found")
+
+
+class S3ObjectNotFoundError(Exception):
+    def __init__(self, object_key, bucket_name):
+        super().__init__(f"S3 object with id {object_key} not found in bucket {bucket_name}")

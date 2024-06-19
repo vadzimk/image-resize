@@ -8,8 +8,11 @@ from celery import Celery, shared_task
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
+from minio import S3Error
 from pika import PlainCredentials
 
+from .exceptions import S3ObjectNotFoundError
+from .schemas import TaskState
 from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 
@@ -87,13 +90,17 @@ def create_versions(object_name_original: str):
                     versions[size_key] = object_name
                     message = {"project_id": project_id,
                                "versions": versions,
-                               "state": "PROGRESS",
+                               "state": TaskState.PROGRESS,
                                "progress": {
                                    "total": len(sizes.keys()),
                                    "done": index + 1,
                                }}
                     notify_client(message)
             # will close temp_input_file
+    except S3Error as e:
+        if e.code == "NoSuchKey":
+            celery_logger.error(f"Object {object_name_original} does not exist in bucket {bucket_name}")
+        raise S3ObjectNotFoundError(object_name_original, bucket_name) from e
     finally:
         if response is not None:
             response.close()
@@ -110,7 +117,10 @@ def notify_client(message: dict):
 
 @task_postrun.connect
 def task_postrun_handler(task_id, retval: dict, state, **kwargs):
-    message = retval.copy()
-    message.update({"state": state})
+    if isinstance(retval, Exception):
+        message = {"state": TaskState.FAILURE}
+    else:
+        message = retval.copy()
+        message.update({"state": state})
     notify_client(message)
     celery_logger.info(json.dumps(message))
