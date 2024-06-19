@@ -1112,5 +1112,114 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 ```
 
----
 a definitions in your AsyncAPI document to validate WebSocket messages in a structured and automated way.
+
+
+---
+
+pytest properly setup and teardown
+
+
+Setting up and tearing down in pytest can be efficiently managed using fixtures. Fixtures are functions decorated with @pytest.fixture that setup a specific environment for the tests and optionally tear it down after the test completes. Here’s a concise guide:
+Basic Setup and Teardown with Fixtures
+
+    Define a fixture:
+
+```python
+
+import pytest
+
+@pytest.fixture
+def setup_data():
+        # Setup code
+        data = {"key": "value"}
+        yield data
+        # Teardown code
+        data.clear()
+```
+    The code before yield runs before the test.
+    The code after yield runs after the test.
+
+Use the fixture in a test:
+
+```python
+
+    def test_example(setup_data):
+        assert setup_data["key"] == "value"
+```
+Fixture Scope
+
+Fixtures can have different scopes:
+
+    function (default): Run once per test.
+    class: Run once per class of tests.
+    module: Run once per module.
+    session: Run once per session.
+
+Example with scope:
+
+```python
+
+@pytest.fixture(scope="module")
+def setup_module():
+    # Setup code
+    data = {"module_key": "module_value"}
+    yield data
+    # Teardown code
+    data.clear()
+```
+
+Autouse Fixtures
+
+Fixtures can automatically be applied to all tests without being explicitly requested by using the autouse=True parameter.
+
+```python
+
+@pytest.fixture(autouse=True)
+def auto_setup():
+    # Setup code
+    print("Setup code")
+    yield
+    # Teardown code
+    print("Teardown code")
+```
+Using pytest's request Object for Complex Fixtures
+
+For more complex setups or conditional teardowns, use the request object.
+
+```python
+
+@pytest.fixture
+def setup_with_request(request):
+    # Setup code
+    resource = allocate_resource()
+
+    def teardown():
+        # Teardown code
+        release_resource(resource)
+    
+    request.addfinalizer(teardown)
+    return resource
+```
+
+Example of Multiple Fixtures
+
+You can use multiple fixtures in a single test function:
+
+```python
+
+@pytest.fixture
+def setup_db():
+    db = connect_to_db()
+    yield db
+    db.disconnect()
+
+@pytest.fixture
+def setup_user():
+    user = create_user()
+    yield user
+    user.delete()
+
+def test_combined(setup_db, setup_user):
+    assert setup_user in setup_db.users
+```

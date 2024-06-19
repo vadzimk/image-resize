@@ -3,13 +3,10 @@ import json
 import re
 from pprint import pprint
 import pytest
-from websockets import connect
 from ..src.services.minio import s3, bucket_name
-from .utils import (upload_file,
-                    get_images_s3_upload_link_and_project_id,
-                    cleanup_s3_objects,
+from .utils import (get_images_s3_upload_link_and_project_id,
                     Subscription,
-                    trigger_original_file_upload, cleanup_project, upload_original_s3
+                    trigger_original_file_upload, upload_original_s3
                     )
 
 from ..src.schemas import GetProjectSchema, ImageVersion
@@ -79,8 +76,8 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
         while len(versions) > 0:
             response = await websocket.recv()  # receive s3 event on object creation
             message = json.loads(response)
-            # print("# receive s3 event on object creation")
-            # pprint(message)
+            print("# receive s3 event on object creation")
+            pprint(message)
             s3object_key = message['s3']['object']['key']
             assert s3object_key.startswith(project_id)
 
@@ -119,7 +116,7 @@ async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_
     all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
     print("objects", [o.object_name for o in all_objects_in_project])
     assert len(all_objects_in_project) == 5  # number of versions of file
-    await cleanup_project(project_id)
+    # await cleanup_project(project_id)
 
 
 # @pytest.mark.skip
@@ -142,7 +139,7 @@ async def test_websocket_can_unsubscribe():
         assert res['unsubscribe'] == project_id
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
-    await cleanup_project(project_id)
+    # await cleanup_project(project_id)
 
 
 # @pytest.mark.skip
@@ -156,7 +153,7 @@ async def test_get_projects_id_returns_single_project(test_client):
     response_versions_original = project_response.versions.get(ImageVersion.original)
     assert response_versions_original is not None
     assert response_versions_original.startswith(project_id)
-    await cleanup_project(project_id)
+    # await cleanup_project(project_id)
 
 
 # @pytest.mark.skip
@@ -173,7 +170,7 @@ async def test_get_projects_returns_list_of_projects(test_client):
     print("projects:=> ", projects)
     print("len projects:=> ", len(projects))
     assert len(projects) == 2
-    for project_id in project_ids:
-        await cleanup_project(project_id)
+    # for project_id in project_ids:
+    #     await cleanup_project(project_id)
 
 # TODO make test setup and teardown properly

@@ -58,19 +58,27 @@ def cleanup_s3_objects(objects: List[str]):
     print(f"cleanup_s3_objects: Done. Deleted {len(objects)} objects.")
 
 
-async def cleanup_mongodb(project_id):
+async def cleanup_mongodb(project_id: str | None = None):
     mongo_client = AsyncIOMotorClient(os.getenv("MONGO_DETAILS", "mongodb://localhost:27017"))
     session = await mongo_client.start_session()
     projects_database = session.client["projects_database"]  # TODO replace by env
     projects_collection = projects_database["projects"]
-    await projects_collection.delete_one({"project_id": project_id})
+    print("cleanup_mongodb:project_id:", project_id)
+    if project_id is not None:
+        await projects_collection.delete_one({"project_id": project_id})
+    else:
+        await projects_collection.delete_many({})  # delete all
+        assert await projects_collection.count_documents({}) == 0  # all documents deleted
     await session.end_session()
 
 
-async def cleanup_project(project_id):
-    all_objects_in_project = list(
-        s3.list_objects(bucket_name=bucket_name, prefix=str(project_id), recursive=True))
-    cleanup_s3_objects([o.object_name for o in all_objects_in_project])
+async def cleanup_project(project_id: str | None = None):
+    all_objects_to_delete = list(
+        s3.list_objects(bucket_name=bucket_name,
+                        prefix=None if project_id is None else str(project_id),
+                        recursive=True))
+    print("all_objects_to_delete", all_objects_to_delete)
+    cleanup_s3_objects([o.object_name for o in all_objects_to_delete])
     await cleanup_mongodb(project_id)
 
 
