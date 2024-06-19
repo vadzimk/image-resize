@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from minio import S3Error
 
+from .exceptions import ProjectNotFoundError
 from .schemas import TaskState
 from .services.projects_service import ProjectsService
 from .repository.projects_repository import ProjectsRepository
@@ -61,17 +62,20 @@ def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
     async def update_project_in_db(original_object_key):
         logger.debug(f"ENTER update_project_in_db")
         project_id = original_object_key.split("/")[0]
-        async with UnitOfWork() as uow:
-            repository = ProjectsRepository(uow.session)
-            projects_service = ProjectsService(repository)
-            updated = await projects_service.update_project(project_id, {
-                "state": TaskState.GOTORIGINAL,
-                "versions": {
-                    "original": original_object_key
-                }
-            })
-            await uow.commit()
-            logger.info(f"updated project {updated.dict()}")
+        try:
+            async with UnitOfWork() as uow:
+                repository = ProjectsRepository(uow.session)
+                projects_service = ProjectsService(repository)
+                updated = await projects_service.update_project(project_id, {
+                    "state": TaskState.GOTORIGINAL,
+                    "versions": {
+                        "original": original_object_key
+                    }
+                })
+                await uow.commit()
+                logger.info(f"updated project {updated.dict()}")
+        except ProjectNotFoundError as e:
+            logger.error(e)
 
     try:
         # create file versions when original is uploaded

@@ -8,18 +8,12 @@ from starlette.testclient import TestClient
 from websockets import connect
 import httpx
 
+from .exceptions import FileUploadFailed
 from ..src.main import app
 from ..src.schemas import ProjectCreatedSchema
 from ..src.services.minio import s3, bucket_name
 
 client = TestClient(app)
-
-
-def upload_file(image_file_path):
-    assert os.path.exists(image_file_path)
-    with open(image_file_path, "rb") as image_file:
-        files = {"file": (os.path.basename(image_file_path), image_file, "image/jpeg")}
-        return client.post("/uploadfile", files=files)
 
 
 def get_images_s3_upload_link_and_project_id(image_file_path) -> Tuple[str, str]:
@@ -33,18 +27,25 @@ def get_images_s3_upload_link_and_project_id(image_file_path) -> Tuple[str, str]
 
 
 async def trigger_original_file_upload(image_file_path, upload_link):
-    await asyncio.sleep(1)  # wait for client to subscribe
+    await asyncio.sleep(1)  # wait for client to subscribe !! do not remove it
     res = s3_upload_link_put_file(image_file_path, upload_link)
-    assert res.status_code == 200
+    if res.status_code != 200:
+        raise FileUploadFailed(image_file_path)
 
 
-async def upload_original_s3():
+async def upload_originals_s3(number: int) -> List[str]:
+    """ :returns list of project ids of the uploaded files """
+
     image_file_path = "./tests/photo.jpeg"
-    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
-    await asyncio.wait([
-        asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
-    ])
-    return project_id
+
+    async def upload_one(file_path):
+        upload_link, project_id = get_images_s3_upload_link_and_project_id(file_path)
+        await trigger_original_file_upload(file_path, upload_link)
+        return project_id
+
+    tasks = [upload_one(image_file_path) for _ in range(number)]
+    project_ids = await asyncio.gather(*tasks)
+    return list(project_ids)
 
 
 def cleanup_s3_objects(objects: List[str]):
@@ -77,7 +78,6 @@ async def cleanup_project(project_id: str | None = None):
         s3.list_objects(bucket_name=bucket_name,
                         prefix=None if project_id is None else str(project_id),
                         recursive=True))
-    print("all_objects_to_delete", all_objects_to_delete)
     cleanup_s3_objects([o.object_name for o in all_objects_to_delete])
     await cleanup_mongodb(project_id)
 

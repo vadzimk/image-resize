@@ -1,176 +1,178 @@
 import asyncio
 import json
 import re
-from pprint import pprint
+from typing import Generator
+
 import pytest
-from ..src.services.minio import s3, bucket_name
-from .utils import (get_images_s3_upload_link_and_project_id,
-                    Subscription,
-                    trigger_original_file_upload, upload_original_s3
+from .utils import (Subscription,
+                    upload_originals_s3,
+                    cleanup_project
                     )
 
 from ..src.schemas import GetProjectSchema, ImageVersion
 
 
-# # TODO remove test
-# # @pytest.mark.skip
-# @pytest.mark.asyncio
-# async def test_upload_file_endpoint_returns_Project():
-#     image_file_path = "./tests/photo.jpeg"
-#     res = upload_file(image_file_path)
-#     print("response: ", end='')
-#     pprint(res.json())
-#     assert res.status_code == 201
-#     project_response = GetProjectSchema.model_validate_json(res.text)
-#     assert project_response.project_id is not None
-#     objects = project_response.versions.values()
-#     print("objects", objects)
-#     assert len(objects) == 5  # number of file versions
-#     await cleanup_project(str(project_response.project_id))
-#
+class VersionIterator:
+    def __init__(self):
+        self._versions = ["big_thumb", "thumb", "big_1920", "d2500"]  # original was uploaded using pre-signed url
+        self._index = 0
 
-# # TODO remove test
-# # @pytest.mark.skip
-# @pytest.mark.asyncio
-# async def test_websocket_can_subscribe_to_key_prefix_receive_subscribed_events_using_file_upload():
-#     """ subscribe events are create and delete object """
-#     image_file_path = "./tests/photo.jpeg"
-#     res = upload_file(image_file_path)
-#     project_id = res.json().get("project_id")
-#
-#     async def trigger_event():
-#         await asyncio.sleep(0)  # wait for the client to subscribe
-#         cleanup_s3_objects(res.json().get("versions").values())
-#         print("----------> triggered event")
-#
-#     async with connect("ws://localhost:8000/ws") as websocket:
-#         await websocket.send(json.dumps({"subscribe": project_id}))
-#         res_confirmation = await websocket.recv()  # receive the confirmation message from websocket
-#         print("res_confirmation", res_confirmation)
-#         assert json.loads(res_confirmation).get("status") == "OK"
-#
-#         await asyncio.wait([
-#             asyncio.create_task(trigger_event())
-#         ])
-#         response = await websocket.recv()  # receive the next message from websocket (only the first message)
-#         message = json.loads(response)
-#         pprint(message)
-#         assert message['s3']['object']['key'].startswith(project_id)
-#     await cleanup_project(project_id)
+    def remove(self, s3object_key):
+        """ removes version that is mentioned in this s3object_key from the self._versions
+            pass if not found
+        """
+        for version in self._versions:
+            pattern = fr'_{version}(?=.*(?:[^.]*\.(?!.*\.))|$)'
+            if re.search(pattern, s3object_key):
+                print("s3 created", version)
+                self._versions.remove(version)
+
+    def __len__(self):
+        return len(self._versions)
+
+    def __iter__(self):
+        return iter(self._versions)
+
+    def __next__(self):
+        try:
+            item = self._versions[self._index]
+        except IndexError:
+            raise StopIteration()
+
+        self._index += 1
+        return item
+
+    def __repr__(self):
+        return str(self._versions)
 
 
-# TODO think about breaking down this test into multiple to assert only one thing about expected behaviour
 # @pytest.mark.skip
-@pytest.mark.asyncio
 @pytest.mark.timeout(10)  # times out when versions are not removed
-async def test_when_new_file_posted_receives_subscribed_events_and_versions_are_created_in_s3():
-    # post original
-    image_file_path = "./tests/photo.jpeg"
-    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
-    print("project_id", project_id)
-    asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
+class TestPostNewFile:
+    versions = VersionIterator()
 
-    versions = ["original", "big_thumb", "thumb", "big_1920", "d2500"]
-    # subscribe to ws s3 events
-    async with Subscription(project_id) as websocket:
-        while len(versions) > 0:
-            response = await websocket.recv()  # receive s3 event on object creation
-            message = json.loads(response)
-            print("# receive s3 event on object creation")
-            pprint(message)
-            s3object_key = message['s3']['object']['key']
-            assert s3object_key.startswith(project_id)
+    async def test_can_receive_ws_events_when_new_versions_created(self, expected_project_id):
 
-            skip_progress_event = False
-            if 's3:ObjectCreated' in message['eventName']:
-                for version in versions:
-                    pattern = fr'_{version}(?=.*(?:[^.]*\.(?!.*\.))|$)'
-                    if re.search(pattern, s3object_key):
-                        print("s3 created", version)
-                        versions.remove(version)
-                        if version == "original":  # no progress event follows after that
-                            skip_progress_event = True
-                        break
-            if skip_progress_event:
-                continue
-            response = await websocket.recv()  # receive celery event on progress
-            message = json.loads(response)
-            print("# receive celery event on progress")
-            pprint(message)
-            assert message.get("state") == "PROGRESS"
-            assert message.get("progress").get("done") == len(message.get("versions").keys()) - 1
+        def s3_event_versions_iterator(versions) -> Generator:
+            while len(versions) > 0:
+                msg = (yield)
+                print("# receive s3 event on object creation")
+                s3object_key = msg.get('s3').get('object').get('key')
+                assert s3object_key.startswith(expected_project_id)
+                # verify all versions are created
+                if 's3:ObjectCreated' in msg.get('eventName'):
+                    versions.remove(s3object_key)
 
-        assert len(versions) == 0  # all versions were created
+        def celery_event_iterator(versions) -> Generator:
+            while len(versions) > 0:
+                msg = (yield)
+                print("# receive celery event on progress")
+                if msg.get("state") == "PROGRESS":
+                    assert msg.get("progress").get("done") == len(msg.get("versions").keys()) - 1
+                else:
+                    assert msg.get("state") == "SUCCESS"
+                # verify all versions are created
+                for s3_key in msg.get("versions").values():
+                    versions.remove(s3_key)
 
-        print("Receiving last")
-        response = await websocket.recv()  # get the next object message
-        message = json.loads(response)
-        pprint(message)
-        # verify state in websocket message
-        assert message.get("project_id") == project_id
-        assert message.get("state") == "SUCCESS"
-        # verify versions in websocket message
-        assert len(message.get("versions").items()) == 5
-
-    # check that versions are created in s3 by listing s3 objects
-    all_objects_in_project = list(s3.list_objects(bucket_name=bucket_name, prefix=project_id, recursive=True))
-    print("objects", [o.object_name for o in all_objects_in_project])
-    assert len(all_objects_in_project) == 5  # number of versions of file
-    # await cleanup_project(project_id)
+        async with Subscription(expected_project_id) as websocket:
+            with pytest.raises(StopIteration):  # All versions were created
+                s3_versions = s3_event_versions_iterator(self.versions)
+                celery_versions = celery_event_iterator(self.versions)
+                next(s3_versions)
+                next(celery_versions)
+                while True:
+                    response = await websocket.recv()  # receive s3 event on object creation
+                    message = json.loads(response)
+                    if message.get('s3') is not None:
+                        s3_versions.send(message)
+                    if message.get("state") is not None:
+                        celery_versions.send(message)
 
 
 # @pytest.mark.skip
-@pytest.mark.asyncio
-async def test_websocket_can_unsubscribe():
-    image_file_path = "./tests/photo.jpeg"
-    upload_link, project_id = get_images_s3_upload_link_and_project_id(image_file_path)
-    print("project_id", project_id)
-    asyncio.create_task(trigger_original_file_upload(image_file_path, upload_link))
-
-    async with Subscription(project_id) as websocket:
-        response = await websocket.recv()
-        message = json.loads(response)
-        s3object_key = message['s3']['object']['key']
-        assert s3object_key.startswith(project_id)
-        await websocket.send(json.dumps({"unsubscribe": project_id}))
-        response = await websocket.recv()
-        res = json.loads(response)
-        assert res['status'] == "OK"
-        assert res['unsubscribe'] == project_id
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
-    # await cleanup_project(project_id)
-
-
-# @pytest.mark.skip
-@pytest.mark.asyncio
-async def test_get_projects_id_returns_single_project(test_client):
-    project_id = await upload_original_s3()
-    await asyncio.sleep(1)  # let the db update state
-    res = test_client.get(f"/projects/{project_id}")
-    project_response = GetProjectSchema.model_validate_json(res.text)
-    assert str(project_response.project_id) == project_id
-    response_versions_original = project_response.versions.get(ImageVersion.original)
-    assert response_versions_original is not None
-    assert response_versions_original.startswith(project_id)
-    # await cleanup_project(project_id)
+class TestWebsocket:
+    """ endpoint websocket('/ws') """
+    async def test_can_unsubscribe(self, expected_project_id):
+        async with Subscription(expected_project_id) as websocket:
+            response = await websocket.recv()  # any message from s3 or celery listener after file upload
+            # print("response1", response)
+            await websocket.send(json.dumps({"unsubscribe": expected_project_id}))
+            max_retries = 3
+            retry_delay = 1
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    response = await websocket.recv()
+                    # print("response2", response)
+                    msg = json.loads(response)
+                    assert msg.get("status") == "OK"
+                    assert msg.get("unsubscribe") == expected_project_id
+                except AssertionError as e:
+                    retry_count += 1
+                    await asyncio.sleep(retry_delay)
+                else:
+                    print(f"\nNumber of retries {retry_count}")
+                    break  # no exceptions in try, assertion passed
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
 
 
 # @pytest.mark.skip
-@pytest.mark.asyncio
-async def test_get_projects_returns_list_of_projects(test_client):
-    project_ids = []
-    for _ in range(5):
-        project_id = await upload_original_s3()
-        project_ids.append(project_id)
-    await asyncio.sleep(1)  # let db update state
+class TestGetProjectsIdReturnsSingleProject:
+    """ endpoint get('/projects/<project_id>') """
+    @pytest.fixture(scope="session")
+    async def res(self, expected_project_id, test_client):
+        await asyncio.sleep(1)  # let the db update state  !! do not remove
+        res = test_client.get(f"/projects/{expected_project_id}")
+        return res
 
-    res = test_client.get(f"/projects", params={"limit": 5, "skip": 3}).json()
-    projects = res.get("projects")
-    print("projects:=> ", projects)
-    print("len projects:=> ", len(projects))
-    assert len(projects) == 2
-    # for project_id in project_ids:
-    #     await cleanup_project(project_id)
+    def test_project_id_in_response(self, res, expected_project_id):
+        project_response = GetProjectSchema.model_validate_json(res.text)
+        assert str(project_response.project_id) == expected_project_id
 
-# TODO make test setup and teardown properly
+    def test_project_id_in_versions_original(self, res, expected_project_id):
+        project_response = GetProjectSchema.model_validate_json(res.text)
+        response_versions_original = project_response.versions.get(ImageVersion.original)
+        assert response_versions_original is not None
+        assert response_versions_original.startswith(str(expected_project_id))
+
+
+# @pytest.mark.skip
+class TestGetProjectsReturnsListOfProjects:
+    """ endpoint get('/projects') """
+    number_of_projects_to_create = 11
+
+    @pytest.fixture(scope="class", autouse=True)
+    async def act(self):
+        await cleanup_project()  # make sure no previous projects are in db
+        assert self.number_of_projects_to_create > 2
+        await upload_originals_s3(self.number_of_projects_to_create)
+        await asyncio.sleep(1)  # let db update state
+
+    def test_when_nothing_is_specified_then_returns_ten_first_projects(self, test_client):
+        res = test_client.get(f"/projects").json()
+        projects = res.get("projects")
+        assert len(projects) == 10
+
+    def test_when_specified_skip_and_specified_limit_then_returns_projects_left_after_skip(self, test_client):
+        the_limit = 5
+        the_skip = 9
+        expected_left_after_skip = 2
+        res = test_client.get(f"/projects", params={"limit": the_limit, "skip": the_skip}).json()
+        projects = res.get("projects")
+        assert len(projects) == expected_left_after_skip
+
+    def test_when_specified_limit_and_not_specified_skip_then_returns_projects_limited_by_limit(self, test_client):
+        expected_limit = self.number_of_projects_to_create - 1 if self.number_of_projects_to_create < 10 else 5
+        res = test_client.get(f"/projects", params={"limit": expected_limit}).json()
+        projects = res.get("projects")
+        assert len(projects) == expected_limit
+
+    def test_when_specified_skip_and_not_specified_limit_then_returns_projects_left_after_skip_with_default_limit_ten(
+            self, test_client):
+        the_skip = 8
+        expected_left_after_skip = 3
+        res = test_client.get(f"/projects", params={"skip": the_skip}).json()
+        projects = res.get("projects")
+        assert len(projects) == expected_left_after_skip

@@ -70,7 +70,7 @@ def create_versions(object_name_original: str):
         "d2500": (2500, 2500)
     }
     versions = {"original": object_name_original}
-
+    response = None
     try:
         response = s3.get_object(bucket_name=bucket_name, object_name=object_name_original)
         # Read data from response.
@@ -95,8 +95,9 @@ def create_versions(object_name_original: str):
                     notify_client(message)
             # will close temp_input_file
     finally:
-        response.close()
-        response.release_conn()
+        if response is not None:
+            response.close()
+            response.release_conn()
     return {"project_id": project_id, "versions": versions}
 
 

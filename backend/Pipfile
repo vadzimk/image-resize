@@ -10,12 +10,12 @@ minio = "*"
 python-multipart = "*"
 pillow = "*"
 pytest = "*"
-pytest-asyncio = "*"
 pytest-timeout = "*"
 redis = "*"
 flower = "*"
 pika = "*"
 motor = "*"
+pytest-asyncio = "*"
 
 [dev-packages]
 
