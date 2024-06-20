@@ -32,4 +32,14 @@ def get_presigned_url_put(object_name):
     return url
 
 
+def get_presigned_url_get(object_name):
+    url = s3.presigned_get_object(
+        bucket_name,
+        object_name,
+        expires=timedelta(days=365),
+        response_headers={"response-content-type": "application/json"}
+    )
+    return url
+
+
 make_bucket_if_not_exist(bucket_name)
