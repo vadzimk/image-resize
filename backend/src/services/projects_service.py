@@ -2,12 +2,15 @@ import logging
 import uuid
 from typing import List, Optional, Tuple, Any, Dict
 
-from .minio import get_presigned_url_put, get_presigned_url_get
+from .minio import get_presigned_url_put
 from ..schemas import CreateProjectSchema, TaskState
 from ..repository.projects_repository import ProjectsRepositoryInterface
 from .project_dom import ProjectDOM
 
 logger = logging.getLogger(__name__)
+
+
+
 
 
 class ProjectsService:
@@ -16,9 +19,6 @@ class ProjectsService:
 
     async def get_project(self, project_id) -> ProjectDOM:
         document = await self.projects_repository.get(project_id)
-        versions = document.get("versions")
-        for key, value in versions.items():
-            versions[key] = get_presigned_url_get(value)
         return ProjectDOM(**document)
 
     async def create_project(self, create_project: CreateProjectSchema) -> ProjectDOM:
@@ -46,4 +46,3 @@ class ProjectsService:
                             filters: Optional[Dict[str, Any]] = None) -> List[ProjectDOM]:
         documents: List[dict] = await self.projects_repository.list(skip=skip, limit=limit, sort=sort, filters=filters)
         return [ProjectDOM(**doc) for doc in documents]
-

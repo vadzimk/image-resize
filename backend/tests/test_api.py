@@ -2,7 +2,6 @@ import asyncio
 import json
 import os.path
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pprint import pprint
 from typing import Collection
 
@@ -21,7 +20,7 @@ from .utils import (Subscription,
 from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestPostNewFile:
 
@@ -39,14 +38,12 @@ class TestPostNewFile:
         assert len(missed_versions) == 0
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 class TestWebsocket:
     """ endpoint websocket('/ws') """
 
     async def test_can_unsubscribe(self, expected_project_id):
         async with Subscription(expected_project_id) as websocket:
-            response = await websocket.recv()  # any message from s3 or celery listener after file upload
-            # print("response1", response)
             await websocket.send(json.dumps({"unsubscribe": expected_project_id}))
             max_retries = 3
             retry_delay = 1
@@ -74,21 +71,23 @@ class TestGetProjectsIdReturnsSingleProject:
 
     @pytest.fixture(scope="session")
     async def res(self, expected_project_id: str, test_client: TestClient, missed_versions) -> Response:
-        # await asyncio.sleep(1)  # let the db update state -- uses missed_versions fixture instead
+        # await asyncio.sleep(3)  # let the db update state -- uses missed_versions fixture instead
         res = test_client.get(f"/projects/{expected_project_id}")
         return res
 
-    @pytest.mark.skip
+    # @pytest.mark.skip
     def test_project_id_in_response(self, res: Response, expected_project_id: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
         assert str(project_response.project_id) == expected_project_id
 
-    @pytest.mark.skip
+    # @pytest.mark.skip
     def test_project_id_in_versions_original(self, res: Response, expected_project_id: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
+        print("project_response")
+        pprint(project_response)
         response_versions_original = project_response.versions.get(ImageVersion.original)
         assert response_versions_original is not None
-        assert response_versions_original.startswith(str(expected_project_id))
+        assert expected_project_id in response_versions_original
 
     async def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self, res: Response):
         async def url_saves_to_image(working_dir, url) -> bool:
@@ -112,7 +111,7 @@ class TestGetProjectsIdReturnsSingleProject:
             assert all(results)  # all files are image files
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 class TestGetProjectsReturnsListOfProjects:
     """ endpoint get('/projects') """
     number_of_projects_to_create = 11

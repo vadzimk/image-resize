@@ -8,6 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from .services.minio import get_presigned_url_get
 from .repository.uow import UnitOfWork
 from .repository.projects_repository import ProjectsRepository
 from .services.projects_service import ProjectsService
@@ -28,6 +29,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def s3_object_names_to_urls(versions: dict) -> dict:
+    """ return new versions dict with s3 object names replaced by s3 get_urls """
+    result = versions.copy()
+    for key, value in result.items():
+        result[key] = get_presigned_url_get(value)
+    return result
+
+
 @router.post("/images", response_model=ProjectCreatedSchema, status_code=status.HTTP_201_CREATED)
 async def get_new_image_url(create_project: CreateProjectSchema):
     """
@@ -46,16 +55,20 @@ async def get_new_image_url(create_project: CreateProjectSchema):
     )
 
 
-@router.get("/projects/{project_id}", response_model=GetProjectSchema, status_code=status.HTTP_200_OK)
+@router.get("/projects/{project_id}", response_model=GetProjectSchema)
 async def get_project(project_id: uuid.UUID):
     async with UnitOfWork() as uow:
         repository = ProjectsRepository(uow.session)
         projects_service = ProjectsService(repository)
         project = await projects_service.get_project(project_id)
-        return GetProjectSchema(project_id=project.project_id, state=project.state, versions=project.versions)
+        return GetProjectSchema(
+            project_id=project.project_id,
+            state=project.state,
+            versions=s3_object_names_to_urls(project.versions)
+        )
 
 
-@router.get("/projects")
+@router.get("/projects", response_model=GetProjectsSchema)
 async def get_projects(skip: int = 0, limit: int = 10):
     async with UnitOfWork() as uow:
         repository = ProjectsRepository(uow.session)
@@ -66,7 +79,7 @@ async def get_projects(skip: int = 0, limit: int = 10):
                 GetProjectSchema(
                     project_id=proj.project_id,
                     state=proj.state,
-                    versions=proj.versions
+                    versions=s3_object_names_to_urls(proj.versions)
                 ) for proj in projects])
 
 
