@@ -30,9 +30,9 @@ executor = ThreadPoolExecutor(max_workers=3)  # for each listener
 async def lifespan(app: FastAPI):
     # before yield: same as @app.on_event('startup')
     loop = asyncio.get_event_loop()
-    executor.submit(listen_create_delete_s3_events_to_publish, loop)
-    executor.submit(listen_create_s3_events_to_upload_versions, loop)
-    executor.submit(listen_celery_task_notifications_queue_to_publish, loop)
+    executor.submit(listen_create_delete_s3_events_and_publish_to_ws, loop)
+    executor.submit(listen_create_s3_events_and_update_db_and_start_celery_tasks, loop)
+    executor.submit(listen_celery_task_notifications_queue, loop)
     yield
     # after yield: same as @app.on_event('shutdown')
     executor.shutdown(wait=False)
@@ -42,8 +42,20 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(router)
 
 
+async def update_project_in_db(project_id: str, update: dict):
+    try:
+        async with UnitOfWork() as uow:
+            repository = ProjectsRepository(uow.session)
+            projects_service = ProjectsService(repository)
+            updated = await projects_service.update_project(project_id, update)
+            await uow.commit()
+            logger.info(f"Updated project {updated.dict()}")
+    except ProjectNotFoundError as e:
+        logger.error(e)
+
+
 # TODO remove this listener no need in publishing to the client websocket connections about file upload events
-def listen_create_delete_s3_events_to_publish(loop: AbstractEventLoop):
+def listen_create_delete_s3_events_and_publish_to_ws(loop: AbstractEventLoop):
     try:
         # publish create/delete events to WS manager
         with s3.listen_bucket_notification(bucket_name=bucket_name,
@@ -58,45 +70,37 @@ def listen_create_delete_s3_events_to_publish(loop: AbstractEventLoop):
         logger.error(f"S3 Error: {err}")
 
 
-def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
-    async def update_project_in_db(original_object_key):
-        logger.debug(f"ENTER update_project_in_db")
+def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractEventLoop):
+
+    async def original_update_db(original_object_key: str):
         project_id = original_object_key.split("/")[0]
-        try:
-            async with UnitOfWork() as uow:
-                repository = ProjectsRepository(uow.session)
-                projects_service = ProjectsService(repository)
-                updated = await projects_service.update_project(project_id, {
-                    "state": TaskState.GOTORIGINAL,
-                    "versions": {
-                        "original": original_object_key
-                    }
-                })
-                await uow.commit()
-                logger.info(f"updated project {updated.dict()}")
-        except ProjectNotFoundError as e:
-            logger.error(e)
+        update = {
+            "state": TaskState.GOTORIGINAL,
+            "versions": {
+                "original": original_object_key
+            }
+        }
+        await update_project_in_db(project_id, update)
+
+    def on_original_upload(s3_object_key):
+        asyncio.run_coroutine_threadsafe(original_update_db(s3_object_key), loop=loop)
+        celery_task = create_versions.s(object_name_original=s3_object_key).apply_async()
+        result_project_id = celery_task.get()
+        logger.debug(
+            f"listen_create_s3_events_to_upload_versions: Celery task created task-id: {celery_task.id}, result_project_id: {result_project_id}")
 
     try:
         # create file versions when original is uploaded
         with s3.listen_bucket_notification(bucket_name=bucket_name, events=["s3:ObjectCreated:*"]) as events:
-            logger.info("ENTERED listen_create_s3_events_to_upload_versions")
+            logger.debug("ENTERED listen_create_s3_events_to_upload_versions")
             for event in events:
                 for record in event.get("Records", []):
                     s3_object_key = record["s3"]["object"]["key"]
-                    logger.info(f'listen_create_s3_events_to_upload_versions: {record["eventName"]}: {s3_object_key}')
+                    logger.debug(f'listen_create_s3_events_to_upload_versions: {record["eventName"]}: {s3_object_key}')
                     if s3_object_key.rsplit(".")[0].endswith("_original"):
-                        future = asyncio.run_coroutine_threadsafe(
-                            update_project_in_db(s3_object_key), loop=loop)
-                        try:
-                            future.result()
-                        except Exception:
-                            logger.error(f"asyncio.run_coroutine_threadsafe:\n{traceback.format_exc()}")
-                        logger.info(f"listen_create_s3_events_to_upload_versions: found original {s3_object_key}")
-                        task = create_versions.s(object_name_original=s3_object_key).apply_async()
-                        result_project_id = task.get()
-                        logger.debug(
-                            f"listen_create_s3_events_to_upload_versions: task-id: {task.id}, result_project_id: {result_project_id}")
+                        logger.debug(f"listen_create_s3_events_to_upload_versions: found original {s3_object_key}")
+                        on_original_upload(s3_object_key)
+
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
     except Exception as e:
@@ -104,16 +108,22 @@ def listen_create_s3_events_to_upload_versions(loop: AbstractEventLoop):
         raise e
 
 
-def listen_celery_task_notifications_queue_to_publish(loop: AbstractEventLoop):
-    logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish")
+def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
+    """ publishes celery event to websocket manager and
+        updates project in database
+    """
+    logger.info(f"Entered listen_celery_task_notifications_queue_to_publish")
 
-    def callback(ch, method, properties, body):
-        logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish.callback")
-        asyncio.run_coroutine_threadsafe(ws_manager.publish_celery_event(json.loads(body)),
+    def celery_event_callback(ch, method, properties, body):
+        logger.info(f"Entered listen_celery_task_notifications_queue_to_publish.callback")
+        message: dict = json.loads(body)
+        asyncio.run_coroutine_threadsafe(ws_manager.publish_celery_event(message),
+                                         loop=loop)
+        asyncio.run_coroutine_threadsafe(update_project_in_db(project_id=message.get('project_id'), update=message),
                                          loop=loop)
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
-        logger.debug(
+        logger.info(
             f"listen_celery_task_notifications_queue_to_publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
-        rabbitmq_channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
+        rabbitmq_channel.basic_consume(queue=queue_name, on_message_callback=celery_event_callback, auto_ack=True)
         rabbitmq_channel.start_consuming()

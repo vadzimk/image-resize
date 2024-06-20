@@ -75,6 +75,7 @@ class ProjectsRepository(ProjectsRepositoryInterface):
         return ProjectDOM(**res)
 
     async def get(self, project_id: uuid.UUID) -> ProjectDOM:
+        logger.warning(f"get project_id {project_id}")
         document: dict | None = await self.projects_collection.find_one({"project_id": str(project_id)})
         if document is None:
             raise ProjectNotFoundError(project_id)

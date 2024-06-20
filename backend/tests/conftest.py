@@ -23,7 +23,7 @@ async def setup_teardown():
 
 
 @pytest.fixture(scope="session")
-async def expected_project_id():
+async def expected_project_id() -> str:
     [project_id] = await upload_originals_s3(1)
     yield project_id
     await cleanup_project(project_id)

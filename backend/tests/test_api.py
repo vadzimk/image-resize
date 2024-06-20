@@ -1,9 +1,13 @@
 import asyncio
 import json
 import re
+from pprint import pprint
 from typing import Generator
 
 import pytest
+from httpx import Response
+from starlette.testclient import TestClient
+
 from .utils import (Subscription,
                     upload_originals_s3,
                     cleanup_project
@@ -84,15 +88,20 @@ class TestPostNewFile:
                 while True:
                     response = await websocket.recv()  # receive s3 event on object creation
                     message = json.loads(response)
+                    # print("message")
+                    # pprint(message)
                     if message.get('s3') is not None:
                         s3_versions.send(message)
                     if message.get("state") is not None:
+                        # print("Celery event:")
+                        # pprint(message)
                         celery_versions.send(message)
 
 
 # @pytest.mark.skip
 class TestWebsocket:
     """ endpoint websocket('/ws') """
+
     async def test_can_unsubscribe(self, expected_project_id):
         async with Subscription(expected_project_id) as websocket:
             response = await websocket.recv()  # any message from s3 or celery listener after file upload
@@ -121,21 +130,28 @@ class TestWebsocket:
 # @pytest.mark.skip
 class TestGetProjectsIdReturnsSingleProject:
     """ endpoint get('/projects/<project_id>') """
+
     @pytest.fixture(scope="session")
-    async def res(self, expected_project_id, test_client):
-        await asyncio.sleep(1)  # let the db update state  !! do not remove
+    async def res(self, expected_project_id: str, test_client: TestClient) -> Response:
+        await asyncio.sleep(3)  # let the db update state  !! do not remove
         res = test_client.get(f"/projects/{expected_project_id}")
         return res
 
-    def test_project_id_in_response(self, res, expected_project_id):
+    # @pytest.mark.skip
+    def test_project_id_in_response(self, res: Response, expected_project_id: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
         assert str(project_response.project_id) == expected_project_id
 
-    def test_project_id_in_versions_original(self, res, expected_project_id):
+    # @pytest.mark.skip
+    def test_project_id_in_versions_original(self, res: Response, expected_project_id: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
         response_versions_original = project_response.versions.get(ImageVersion.original)
         assert response_versions_original is not None
         assert response_versions_original.startswith(str(expected_project_id))
+
+    def test_can_download_versions_using_versions_urls(self, res: Response):
+        print("res_json")
+        pprint(res.json())
 
 
 # @pytest.mark.skip

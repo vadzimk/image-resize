@@ -38,7 +38,7 @@ async def upload_originals_s3(number: int) -> List[str]:
 
     image_file_path = "./tests/photo.jpeg"
 
-    async def upload_one(file_path):
+    async def upload_one(file_path) -> str:
         upload_link, project_id = get_images_s3_upload_link_and_project_id(file_path)
         await trigger_original_file_upload(file_path, upload_link)
         return project_id

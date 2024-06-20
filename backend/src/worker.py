@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from minio import S3Error
 from pika import PlainCredentials
 
+from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
 from .schemas import TaskState
 from .services.minio import s3, bucket_name
@@ -62,6 +63,7 @@ def rabbitmq_channel_connection():
 
 
 @shared_task
+@timethis
 def create_versions(object_name_original: str):
     project_id, basename = object_name_original.rsplit("/")
     basename_wo_ext, ext = basename.rsplit(".")
