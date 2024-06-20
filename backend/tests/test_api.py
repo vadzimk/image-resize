@@ -90,26 +90,26 @@ class TestGetProjectsIdReturnsSingleProject:
         assert response_versions_original is not None
         assert response_versions_original.startswith(str(expected_project_id))
 
-    def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self, res: Response):
-        def url_saves_to_image(working_dir, url) -> bool:
+    async def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self, res: Response):
+        async def url_saves_to_image(working_dir, url) -> bool:
             """
             download image from url save it in parent_dir and
             return true if it is a valid image
             """
-            response = httpx.get(url)
-            response.raise_for_status()
-            filename = response.headers.get("Content-Disposition", "").split("filename=")[-1].strip('"')
-            file_path = os.path.join(working_dir, filename)
-            with open(file_path, "wb") as file:
-                file.write(response.content)
-            return is_image(file_path)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                filename = response.headers.get("Content-Disposition", "").split("filename=")[-1].strip('"')
+                file_path = os.path.join(working_dir, filename)
+                with open(file_path, "wb") as file:
+                    file.write(response.content)
+                return is_image(file_path)
 
         project = res.json()
         with tempfile.TemporaryDirectory() as temp_dir:
-            with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(url_saves_to_image, temp_dir, s3_image_url) for s3_image_url in project.get("versions").values()]
-                results = [future.result() for future in as_completed(futures)]
-                assert all(results)  # all files are image files
+            tasks = [url_saves_to_image(temp_dir, s3_image_url) for s3_image_url in project.get("versions").values()]
+            results = await asyncio.gather(*tasks)
+            assert all(results)  # all files are image files
 
 
 @pytest.mark.skip
