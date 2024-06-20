@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.testclient import TestClient
 from websockets import connect
 import httpx
+from PIL import Image
 
 from .exceptions import FileUploadFailed
 from ..src.main import app
@@ -107,3 +108,12 @@ class Subscription:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.websocket.close()
+
+
+def is_image(file_path):
+    try:
+        with Image.open(file_path) as img:
+            img.verify()
+        return True
+    except (IOError, SyntaxError):
+        return False

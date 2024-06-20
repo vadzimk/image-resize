@@ -27,17 +27,21 @@ def get_presigned_url_put(object_name):
         bucket_name,
         object_name,
         expires=timedelta(days=1),
-        response_headers={"response-content-type": "application/json"},
+        # response_headers={"response-content-type": "application/json"},
     )
     return url
 
 
-def get_presigned_url_get(object_name):
+def get_presigned_url_get(object_name:str):
+    response_headers = {
+        "response-content-type": "application/octet-stream",
+        "response-content-disposition": f'attachment; filename="{object_name.replace("/", "_")}"'
+    }
     url = s3.presigned_get_object(
         bucket_name,
         object_name,
-        expires=timedelta(days=365),
-        response_headers={"response-content-type": "application/json"}
+        expires=timedelta(days=7),
+        response_headers=response_headers
     )
     return url
 

@@ -1,8 +1,12 @@
 import asyncio
 import json
+import os.path
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pprint import pprint
 from typing import Collection
 
+import httpx
 import pytest
 from httpx import Response
 from pydantic import ValidationError
@@ -10,13 +14,14 @@ from starlette.testclient import TestClient
 
 from .utils import (Subscription,
                     upload_originals_s3,
-                    cleanup_project
+                    cleanup_project,
+                    is_image
                     )
 
 from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestPostNewFile:
 
@@ -34,7 +39,7 @@ class TestPostNewFile:
         assert len(missed_versions) == 0
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 class TestWebsocket:
     """ endpoint websocket('/ws') """
 
@@ -73,24 +78,41 @@ class TestGetProjectsIdReturnsSingleProject:
         res = test_client.get(f"/projects/{expected_project_id}")
         return res
 
-    # @pytest.mark.skip
+    @pytest.mark.skip
     def test_project_id_in_response(self, res: Response, expected_project_id: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
         assert str(project_response.project_id) == expected_project_id
 
-    # @pytest.mark.skip
+    @pytest.mark.skip
     def test_project_id_in_versions_original(self, res: Response, expected_project_id: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
         response_versions_original = project_response.versions.get(ImageVersion.original)
         assert response_versions_original is not None
         assert response_versions_original.startswith(str(expected_project_id))
 
-    def test_can_download_versions_using_versions_urls(self, res: Response):
-        print("res_json")
-        pprint(res.json())
+    def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self, res: Response):
+        def url_saves_to_image(working_dir, url) -> bool:
+            """
+            download image from url save it in parent_dir and
+            return true if it is a valid image
+            """
+            response = httpx.get(url)
+            response.raise_for_status()
+            filename = response.headers.get("Content-Disposition", "").split("filename=")[-1].strip('"')
+            file_path = os.path.join(working_dir, filename)
+            with open(file_path, "wb") as file:
+                file.write(response.content)
+            return is_image(file_path)
+
+        project = res.json()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(url_saves_to_image, temp_dir, s3_image_url) for s3_image_url in project.get("versions").values()]
+                results = [future.result() for future in as_completed(futures)]
+                assert all(results)  # all files are image files
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 class TestGetProjectsReturnsListOfProjects:
     """ endpoint get('/projects') """
     number_of_projects_to_create = 11
