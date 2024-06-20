@@ -1,11 +1,11 @@
 import asyncio
 import json
-import re
 from pprint import pprint
-from typing import Generator
+from typing import Collection
 
 import pytest
 from httpx import Response
+from pydantic import ValidationError
 from starlette.testclient import TestClient
 
 from .utils import (Subscription,
@@ -13,89 +13,25 @@ from .utils import (Subscription,
                     cleanup_project
                     )
 
-from ..src.schemas import GetProjectSchema, ImageVersion
-
-
-class VersionIterator:
-    def __init__(self):
-        self._versions = ["big_thumb", "thumb", "big_1920", "d2500"]  # original was uploaded using pre-signed url
-        self._index = 0
-
-    def remove(self, s3object_key):
-        """ removes version that is mentioned in this s3object_key from the self._versions
-            pass if not found
-        """
-        for version in self._versions:
-            pattern = fr'_{version}(?=.*(?:[^.]*\.(?!.*\.))|$)'
-            if re.search(pattern, s3object_key):
-                print("s3 created", version)
-                self._versions.remove(version)
-
-    def __len__(self):
-        return len(self._versions)
-
-    def __iter__(self):
-        return iter(self._versions)
-
-    def __next__(self):
-        try:
-            item = self._versions[self._index]
-        except IndexError:
-            raise StopIteration()
-
-        self._index += 1
-        return item
-
-    def __repr__(self):
-        return str(self._versions)
+from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
 
 
 # @pytest.mark.skip
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestPostNewFile:
-    versions = VersionIterator()
 
-    async def test_can_receive_ws_events_when_new_versions_created(self, expected_project_id):
-
-        def s3_event_versions_iterator(versions) -> Generator:
-            while len(versions) > 0:
-                msg = (yield)
-                print("# receive s3 event on object creation")
-                s3object_key = msg.get('s3').get('object').get('key')
-                assert s3object_key.startswith(expected_project_id)
-                # verify all versions are created
-                if 's3:ObjectCreated' in msg.get('eventName'):
-                    versions.remove(s3object_key)
-
-        def celery_event_iterator(versions) -> Generator:
-            while len(versions) > 0:
-                msg = (yield)
-                print("# receive celery event on progress")
-                if msg.get("state") == "PROGRESS":
-                    assert msg.get("progress").get("done") == len(msg.get("versions").keys()) - 1
-                else:
-                    assert msg.get("state") == "SUCCESS"
-                # verify all versions are created
-                for s3_key in msg.get("versions").values():
-                    versions.remove(s3_key)
-
+    async def test_can_receive_progress_events_when_new_versions_created(self, expected_project_id):
         async with Subscription(expected_project_id) as websocket:
-            with pytest.raises(StopIteration):  # All versions were created
-                s3_versions = s3_event_versions_iterator(self.versions)
-                celery_versions = celery_event_iterator(self.versions)
-                next(s3_versions)
-                next(celery_versions)
-                while True:
-                    response = await websocket.recv()  # receive s3 event on object creation
-                    message = json.loads(response)
-                    # print("message")
-                    # pprint(message)
-                    if message.get('s3') is not None:
-                        s3_versions.send(message)
-                    if message.get("state") is not None:
-                        # print("Celery event:")
-                        # pprint(message)
-                        celery_versions.send(message)
+            while True:
+                res = await websocket.recv()
+                try:
+                    assert ProjectProgressSchema.model_validate_json(res)
+                    break
+                except ValidationError:
+                    pass
+
+    async def test_all_versions_are_created(self, missed_versions: Collection):
+        assert len(missed_versions) == 0
 
 
 # @pytest.mark.skip
@@ -132,8 +68,8 @@ class TestGetProjectsIdReturnsSingleProject:
     """ endpoint get('/projects/<project_id>') """
 
     @pytest.fixture(scope="session")
-    async def res(self, expected_project_id: str, test_client: TestClient) -> Response:
-        await asyncio.sleep(3)  # let the db update state  !! do not remove
+    async def res(self, expected_project_id: str, test_client: TestClient, missed_versions) -> Response:
+        # await asyncio.sleep(1)  # let the db update state -- uses missed_versions fixture instead
         res = test_client.get(f"/projects/{expected_project_id}")
         return res
 
