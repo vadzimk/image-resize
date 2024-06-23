@@ -87,7 +87,8 @@ components:
       examples:
         - name: subscribe example
           payload:
-            subscribe: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
+            action: SUBSCRIBE
+            project_id: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
     onSubscribe:
       summary: server response to subscribe command
       payload:
@@ -95,15 +96,16 @@ components:
     unsubscribe:
       summary: unsubscribe from a particular project_id
       payload:
-        $ref: '#/components/schemas/RequestUnSubscribeSchema'
+        $ref: '#/components/schemas/RequestSubscribeSchema'
       examples:
         - name: unsubscribe example
           payload:
-            unsubscribe: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
+            action: UNSUBSCRIBE
+            project_id: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
     onUnsubscribe:
       summary: server response to unsubscribe command
       payload:
-        $ref: '#/components/schemas/ResponseOnUnSubscribeSchema'
+        $ref: '#/components/schemas/ResponseOnSubscribeSchema'
     onTaskProgressUpdated:
       summary: task progress details
       payload:
@@ -113,26 +115,19 @@ components:
     RequestSubscribeSchema:
       type: object
       required:
-        - subscribe
+        - action
+        - project_id
       properties:
-        subscribe:
-          type: string
-          description: project uuid
-    RequestUnSubscribeSchema:
-      type: object
-      required:
-        - unsubscribe
-      properties:
-        unsubscribe:
+        action:
+          enum:
+            - SUBSCRIBE
+            - UNSUBSCRIBE
+        project_id:
           type: string
           description: project uuid
     ResponseOnSubscribeSchema:
       allOf:
         - $ref: '#/components/schemas/RequestSubscribeSchema'
-        - $ref: '#/components/schemas/ResponseBasicSchema'
-    ResponseOnUnSubscribeSchema:
-      allOf:
-        - $ref: '#/components/schemas/RequestUnSubscribeSchema'
         - $ref: '#/components/schemas/ResponseBasicSchema'
     ResponseBasicSchema:
       type: object

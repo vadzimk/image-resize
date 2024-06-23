@@ -8,25 +8,29 @@ from fastapi.encoders import jsonable_encoder
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+# from .bootstrap import bootstrap
+# from .domain import commands
+# from .services.message_bus import Message
 from .services.minio import get_presigned_url_get
 from .repository.uow import UnitOfWork
 from .repository.projects_repository import ProjectsRepository
 from .services.projects_service import ProjectsService
-from .exceptions import AlreadySubscribed, NotInSubscriptions
+from .exceptions import ClientError
 from .websocket_manager import ws_manager
 from .schemas import (ProjectCreatedSchema,
                       CreateProjectSchema,
                       GetProjectSchema,
                       SubscribeSchema,
-                      UnSubscribeSchema,
                       OnSubscribeSchema,
-                      OnUnSubscribeSchema, GetProjectsSchema,
+                      GetProjectsSchema,
+                      SubscribeAction,
                       )
 
 from .utils import validate_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+# bus = bootstrap()
 
 
 def s3_object_names_to_urls(versions: dict) -> dict:
@@ -95,6 +99,7 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.info(f"Path/ws Client message {data}")
             message: dict = json.loads(data)
             await handle_message(websocket, message)
+            # bus.handle(make_command(message))  TODO this is the new way
     except WebSocketDisconnect:
         logger.info("Client disconnected")
     except Exception:
@@ -103,32 +108,42 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 
+# def make_command(message: dict, websocket: WebSocket) -> Message:
+#     mapping = {
+#         SubscribeSchema: commands.Subscribe,
+#         # UnSubscribeSchema: commands.UnSubscribe  # TODO ?
+#     }
+#     message_model = validate_message(message, list(mapping.keys()))
+#     return mapping.get(message_model)(websocket, message_model.model_dump())
+
+
 async def handle_message(websocket: WebSocket, message: dict):
     """
     validates websocket incoming messages and passes them to ws_manager
     """
     logger.debug("Enter handle_message")
-    message_model = validate_message(message, [SubscribeSchema, UnSubscribeSchema])
+    message_model = validate_message(message, [SubscribeSchema])
     logger.debug(f"handle_message message_model {message_model}")
     response_message = message_model.model_dump()
     response_message.update({"status_code": 200, "status": "OK"})
     try:
         if isinstance(message_model, SubscribeSchema):
-            logger.debug(f"isinstance(message_model, SubscribeSchema) {type(message_model.subscribe)}")
-            ws_manager.subscribe(websocket, str(message_model.subscribe))
-            logger.debug(f"Subscribed")
-        elif isinstance(message_model, UnSubscribeSchema):
-            logger.debug(f"isinstance(message_model, UnSubscribeSchema)")
-            ws_manager.unsubscribe(websocket, str(message_model.unsubscribe))
+            if message_model.action == SubscribeAction.SUBSCRIBE:
+                ws_manager.subscribe(websocket, str(message_model.project_id))
+                logger.debug(f"Subscribed")
+            elif message_model.action == SubscribeAction.UNSUBSCRIBE:
+                ws_manager.unsubscribe(websocket, str(message_model.project_id))
+                logger.warning(f"Unsubscribed")
+            else:
+                raise Exception(f"Unknown SubscribeAction: {message_model.action}")
         else:
             raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")
-    except (AlreadySubscribed, NotInSubscriptions) as err:
+    except ClientError as err:
         response_message.update({"status_code": 400, "status": "Error", "message": str(err)})
-    except Exception as err:
-        response_message.update({"status_code": 400, "status": "Error", "message": "Unknown Server Error"})
-        raise err
+    except Exception:
+        raise
     finally:
         await websocket.send_json(
             jsonable_encoder(
-                validate_message(response_message, [OnSubscribeSchema, OnUnSubscribeSchema])
+                validate_message(response_message, [OnSubscribeSchema])
             ))

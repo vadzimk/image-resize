@@ -23,7 +23,6 @@ from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
 # @pytest.mark.skip
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestPostNewFile:
-
     async def test_can_receive_progress_events_when_new_versions_created(self, expected_project_id):
         async with Subscription(expected_project_id) as websocket:
             while True:
@@ -39,12 +38,13 @@ class TestPostNewFile:
 
 
 # @pytest.mark.skip
+@pytest.mark.timeout(10)
 class TestWebsocket:
     """ endpoint websocket('/ws') """
 
     async def test_can_unsubscribe(self, expected_project_id):
         async with Subscription(expected_project_id) as websocket:
-            await websocket.send(json.dumps({"unsubscribe": expected_project_id}))
+            await websocket.send(json.dumps({"action": "UNSUBSCRIBE", "project_id": expected_project_id}))
             max_retries = 3
             retry_delay = 1
             retry_count = 0
@@ -54,9 +54,11 @@ class TestWebsocket:
                     # print("response2", response)
                     msg = json.loads(response)
                     assert msg.get("status") == "OK"
-                    assert msg.get("unsubscribe") == expected_project_id
+                    assert msg.get("action") == "UNSUBSCRIBE"
+                    assert msg.get("project_id") == expected_project_id
                 except AssertionError as e:
                     retry_count += 1
+                    print("retry_count", retry_count)
                     await asyncio.sleep(retry_delay)
                 else:
                     print(f"\nNumber of retries {retry_count}")
@@ -89,7 +91,8 @@ class TestGetProjectsIdReturnsSingleProject:
         assert response_versions_original is not None
         assert expected_project_id in response_versions_original
 
-    async def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self, res: Response):
+    async def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self,
+                                                                                                       res: Response):
         async def url_saves_to_image(working_dir, url) -> bool:
             """
             download image from url save it in parent_dir and

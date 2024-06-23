@@ -101,7 +101,7 @@ class Subscription:
 
     async def __aenter__(self):
         self.websocket = await connect("ws://localhost:8000/ws")
-        await self.websocket.send(json.dumps({"subscribe": self.project_id}))
+        await self.websocket.send(json.dumps({"action": "SUBSCRIBE", "project_id": self.project_id}))
         res_confirmation = await self.websocket.recv()
         assert json.loads(res_confirmation).get("status") == "OK"
         return self.websocket
