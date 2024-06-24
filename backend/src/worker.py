@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 from contextlib import contextmanager
+from typing import Type
 
 import pika
 from celery import Celery, shared_task
@@ -10,10 +11,11 @@ from celery.utils.log import get_task_logger
 from dotenv import load_dotenv
 from minio import S3Error
 from pika import PlainCredentials
+from pydantic import BaseModel
 
 from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
-from .schemas import TaskState
+from .schemas import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion
 from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 
@@ -69,12 +71,12 @@ def create_versions(object_name_original: str):
     basename_wo_ext, ext = basename.rsplit(".")
     input_file_name_less = basename_wo_ext.replace("_original", "")
     sizes = {
-        "thumb": (150, 120),
-        "big_thumb": (700, 700),
-        "big_1920": (1920, 1080),
-        "d2500": (2500, 2500)
+        ImageVersion.thumb: (150, 120),
+        ImageVersion.big_thumb: (700, 700),
+        ImageVersion.big_1920: (1920, 1080),
+        ImageVersion.d2500: (2500, 2500)
     }
-    versions = {"original": object_name_original}
+    versions = {ImageVersion.original: object_name_original}
     response = None
     try:
         response = s3.get_object(bucket_name=bucket_name, object_name=object_name_original)
@@ -90,13 +92,14 @@ def create_versions(object_name_original: str):
                     object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
                     s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
                     versions[size_key] = object_name
-                    message = {"project_id": project_id,
-                               "versions": versions,
-                               "state": TaskState.PROGRESS,
-                               "progress": {
-                                   "total": len(sizes.keys()),
-                                   "done": index + 1,
-                               }}
+
+                    message = ProjectProgressSchema(
+                        project_id=project_id,
+                        versions=versions,
+                        state=TaskState.PROGRESS,
+                        progress=ProgressDetail(done=(index + 1), total=len(sizes.keys()))
+                    )
+
                     notify_client(message)
             # will close temp_input_file
     except S3Error as e:
@@ -107,10 +110,10 @@ def create_versions(object_name_original: str):
         if response is not None:
             response.close()
             response.release_conn()
-    return {"project_id": project_id, "versions": versions}
+    return message
 
 
-def notify_client(message: dict):
+def notify_client(message: ProjectProgressSchema):
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         rabbitmq_channel.basic_publish(exchange='',
                                        routing_key=queue_name,
@@ -118,11 +121,10 @@ def notify_client(message: dict):
 
 
 @task_postrun.connect
-def task_postrun_handler(task_id, retval: dict, state, **kwargs):
+def task_postrun_handler(task_id, retval: ProjectProgressSchema | Exception, state, **kwargs):
     if isinstance(retval, Exception):
-        message = {"state": TaskState.FAILURE}
+        retval.state = TaskState.FAILURE
     else:
-        message = retval.copy()
-        message.update({"state": state})
-    notify_client(message)
-    celery_logger.info(json.dumps(message))
+        retval.state = state
+    notify_client(retval)
+    celery_logger.info(json.dumps(retval))

@@ -111,10 +111,10 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
     """ publishes celery event to websocket manager and
         updates project in database
     """
-    logger.info(f"Entered listen_celery_task_notifications_queue_to_publish")
+    logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish")
 
     def celery_event_callback(ch, method, properties, body):
-        logger.info(f"Entered listen_celery_task_notifications_queue_to_publish.callback")
+        logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish.callback")
         message: dict = json.loads(body)
         asyncio.run_coroutine_threadsafe(ws_manager.publish_celery_event(message),
                                          loop=loop)
