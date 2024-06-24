@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import traceback
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager

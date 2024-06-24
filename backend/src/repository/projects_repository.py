@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo import ReturnDocument
 
 from ..exceptions import ProjectNotFoundError
-from ..services.project_dom import ProjectDOM
+from ..domain.model import ProjectDOM
 
 logger = logging.getLogger(__name__)
 

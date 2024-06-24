@@ -1,11 +1,14 @@
 """
 domain object model
 """
+import logging
 import uuid
 from dataclasses import asdict
 from typing import Optional, Dict
 
 from ..schemas import TaskState, ProgressDetail, ImageVersion
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectDOM:

@@ -5,12 +5,9 @@ from typing import List, Optional, Tuple, Any, Dict
 from .minio import get_presigned_url_put
 from ..schemas import CreateProjectSchema, TaskState
 from ..repository.projects_repository import ProjectsRepositoryInterface
-from .project_dom import ProjectDOM
+from ..domain.model import ProjectDOM
 
 logger = logging.getLogger(__name__)
-
-
-
 
 
 class ProjectsService:

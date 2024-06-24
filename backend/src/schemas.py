@@ -60,21 +60,17 @@ class ProjectProgressSchema(GetProjectSchema):
     progress: ProgressDetail
 
 
+class SubscribeAction(str, Enum):
+    SUBSCRIBE = "SUBSCRIBE"
+    UNSUBSCRIBE = "UNSUBSCRIBE"
+
+
 class SubscribeSchema(BaseModel):
-    subscribe: Annotated[UUID4, Strict(False)]
-
-
-class UnSubscribeSchema(BaseModel):
-    unsubscribe: Annotated[UUID4, Strict(False)]
+    action: SubscribeAction
+    project_id: Annotated[UUID4, Strict(False)]
 
 
 class OnSubscribeSchema(SubscribeSchema):
-    status_code: int
-    status: str
-    message: Optional[str] = None
-
-
-class OnUnSubscribeSchema(UnSubscribeSchema):
     status_code: int
     status: str
     message: Optional[str] = None

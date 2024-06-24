@@ -2,15 +2,18 @@ import json
 import logging
 import traceback
 import uuid
+from typing import Type, Union
 
 from fastapi import APIRouter
 from fastapi.encoders import jsonable_encoder
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-# from .bootstrap import bootstrap
-# from .domain import commands
-# from .services.message_bus import Message
+from .domain.commands import UnSubscribe, Subscribe, Command
+from .services.handlers import command_handlers
+from .bootstrap import bootstrap
+from .domain import commands
+from .services.message_bus import Message
 from .services.minio import get_presigned_url_get
 from .repository.uow import UnitOfWork
 from .repository.projects_repository import ProjectsRepository
@@ -30,7 +33,7 @@ from .utils import validate_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-# bus = bootstrap()
+bus = bootstrap()
 
 
 def s3_object_names_to_urls(versions: dict) -> dict:
@@ -98,8 +101,8 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             logger.info(f"Path/ws Client message {data}")
             message: dict = json.loads(data)
-            await handle_message(websocket, message)
-            # bus.handle(make_command(message))  TODO this is the new way
+            # await handle_message(websocket, message)  # TODO remove it, this is the old way
+            bus.handle(make_command(message, websocket))
     except WebSocketDisconnect:
         logger.info("Client disconnected")
     except Exception:
@@ -108,42 +111,41 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 
-# def make_command(message: dict, websocket: WebSocket) -> Message:
-#     mapping = {
-#         SubscribeSchema: commands.Subscribe,
-#         # UnSubscribeSchema: commands.UnSubscribe  # TODO ?
-#     }
-#     message_model = validate_message(message, list(mapping.keys()))
-#     return mapping.get(message_model)(websocket, message_model.model_dump())
-
-
-async def handle_message(websocket: WebSocket, message: dict):
-    """
-    validates websocket incoming messages and passes them to ws_manager
-    """
-    logger.debug("Enter handle_message")
+def make_command(message: dict, websocket: WebSocket) -> commands.Command:
     message_model = validate_message(message, [SubscribeSchema])
-    logger.debug(f"handle_message message_model {message_model}")
-    response_message = message_model.model_dump()
-    response_message.update({"status_code": 200, "status": "OK"})
-    try:
-        if isinstance(message_model, SubscribeSchema):
-            if message_model.action == SubscribeAction.SUBSCRIBE:
-                ws_manager.subscribe(websocket, str(message_model.project_id))
-                logger.debug(f"Subscribed")
-            elif message_model.action == SubscribeAction.UNSUBSCRIBE:
-                ws_manager.unsubscribe(websocket, str(message_model.project_id))
-                logger.warning(f"Unsubscribed")
-            else:
-                raise Exception(f"Unknown SubscribeAction: {message_model.action}")
-        else:
-            raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")
-    except ClientError as err:
-        response_message.update({"status_code": 400, "status": "Error", "message": str(err)})
-    except Exception:
-        raise
-    finally:
-        await websocket.send_json(
-            jsonable_encoder(
-                validate_message(response_message, [OnSubscribeSchema])
-            ))
+    for CommandType in command_handlers.keys():
+        if CommandType.__name__.upper() == message_model.action:
+            return CommandType(websocket, str(message_model.project_id))
+    raise Exception(f"Unknown handler action {message_model.action}")
+
+
+# async def handle_message(websocket: WebSocket, message: dict):
+#     """
+#     validates websocket incoming messages and passes them to ws_manager
+#     """
+#     logger.debug("Enter handle_message")
+#     message_model = validate_message(message, [SubscribeSchema])
+#     logger.debug(f"handle_message message_model {message_model}")
+#     response_message = message_model.model_dump()
+#     response_message.update({"status_code": 200, "status": "OK"})
+#     try:
+#         if isinstance(message_model, SubscribeSchema):
+#             if message_model.action == SubscribeAction.SUBSCRIBE:
+#                 ws_manager.subscribe(websocket, str(message_model.project_id))
+#                 logger.debug(f"Subscribed")
+#             elif message_model.action == SubscribeAction.UNSUBSCRIBE:
+#                 ws_manager.unsubscribe(websocket, str(message_model.project_id))
+#                 logger.warning(f"Unsubscribed")
+#             else:
+#                 raise Exception(f"Unknown SubscribeAction: {message_model.action}")
+#         else:
+#             raise Exception(f"handle_message: unexpected Pydantic Model {type(message_model).__name__}")
+#     except ClientError as err:
+#         response_message.update({"status_code": 400, "status": "Error", "message": str(err)})
+#     except Exception:
+#         raise
+#     finally:
+#         await websocket.send_json(
+#             jsonable_encoder(
+#                 validate_message(response_message, [OnSubscribeSchema])
+#             ))
