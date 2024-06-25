@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from asyncio import AbstractEventLoop
 from typing import Dict, Type, List, Callable
 
 from fastapi.encoders import jsonable_encoder

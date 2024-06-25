@@ -31,15 +31,6 @@ class ImageVersion(str, Enum):
     d2500 = "d2500"
 
 
-# @dataclass
-# class ImageVersions:
-#     original: str
-#     thumb: str
-#     big_thumb: str
-#     big_1920: str
-#     d2500: str
-
-
 class GetProjectSchema(BaseModel):
     project_id: Annotated[UUID4, Strict(False)]
     state: TaskState
