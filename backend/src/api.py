@@ -2,13 +2,14 @@ import json
 import logging
 import traceback
 import uuid
-from typing import Type, Union
+from typing import Type, Union, List
 
 from fastapi import APIRouter
 from fastapi.encoders import jsonable_encoder
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from .domain.model import ProjectDOM
 from .domain.commands import UnSubscribe, Subscribe, Command
 from .services.handlers import command_handlers
 from .bootstrap import bootstrap
@@ -52,7 +53,7 @@ async def get_new_image_url(create_project: CreateProjectSchema):
     async with UnitOfWork() as uow:
         repository = ProjectsRepository(uow.session)
         project_service = ProjectsService(repository)
-        project_dom = await project_service.create_project(create_project)
+        project_dom: ProjectDOM = await project_service.create_project(create_project)
         await uow.commit()
 
     return ProjectCreatedSchema(
@@ -67,7 +68,7 @@ async def get_project(project_id: uuid.UUID):
     async with UnitOfWork() as uow:
         repository = ProjectsRepository(uow.session)
         projects_service = ProjectsService(repository)
-        project = await projects_service.get_project(project_id)
+        project: ProjectDOM = await projects_service.get_project(project_id)
         return GetProjectSchema(
             project_id=project.project_id,
             state=project.state,
@@ -80,7 +81,7 @@ async def get_projects(skip: int = 0, limit: int = 10):
     async with UnitOfWork() as uow:
         repository = ProjectsRepository(uow.session)
         project_service = ProjectsService(repository)
-        projects = await project_service.list_projects(skip=skip, limit=limit)
+        projects: List[ProjectDOM] = await project_service.list_projects(skip=skip, limit=limit)
         return GetProjectsSchema(
             projects=[
                 GetProjectSchema(

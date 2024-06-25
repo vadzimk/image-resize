@@ -61,22 +61,22 @@ def listen_create_delete_s3_events_and_publish_to_ws(loop: AbstractEventLoop):
 
 
 def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractEventLoop):
-    async def original_update_db(original_object_key: str):
-        project_id = original_object_key.split("/")[0]
-        update = {
-            "state": TaskState.GOTORIGINAL,
-            "versions": {
-                "original": original_object_key
-            }
-        }
-        await update_project_in_db(project_id, update)
-
-    def on_original_upload(s3_object_key):
-        asyncio.run_coroutine_threadsafe(original_update_db(s3_object_key), loop=loop)
-        celery_task = create_versions.s(object_name_original=s3_object_key).apply_async()
-        result = celery_task.get()
-        logger.info(
-            f"listen_create_s3_events_to_upload_versions: Celery task created task-id: {celery_task.id}, result: {result}")
+    # async def original_update_db(original_object_key: str):
+    #     project_id = original_object_key.split("/")[0]
+    #     update = {
+    #         "state": TaskState.GOTORIGINAL,
+    #         "versions": {
+    #             "original": original_object_key
+    #         }
+    #     }
+    #     await update_project_in_db(project_id, update)
+    #
+    # def on_original_upload(s3_object_key):
+    #     asyncio.run_coroutine_threadsafe(original_update_db(s3_object_key), loop=loop)
+    #     celery_task = create_versions.s(object_name_original=s3_object_key).apply_async()
+    #     result = celery_task.get()
+    #     logger.info(
+    #         f"listen_create_s3_events_to_upload_versions: Celery task created task-id: {celery_task.id}, result: {result}")
 
     try:
         # create file versions when original is uploaded
@@ -89,15 +89,15 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
                     if s3_object_key.rsplit(".")[0].endswith("_original"):
                         logger.debug(f"listen_create_s3_events_to_upload_versions: found original {s3_object_key}")
                         original_object_key = s3_object_key
-                        on_original_upload(s3_object_key)
-                        # bus.handle(
-                        #     OriginalUploaded(
-                        #         message=GetProjectSchema(
-                        #             project_id=original_object_key.split("/")[0],
-                        #             state=TaskState.GOTORIGINAL,
-                        #             versions={ImageVersion.original: original_object_key}
-                        #         ), loop=loop)
-                        # )
+                        # on_original_upload(s3_object_key)
+                        bus.handle(
+                            OriginalUploaded(
+                                message=GetProjectSchema(
+                                    project_id=original_object_key.split("/")[0],
+                                    state=TaskState.GOTORIGINAL,
+                                    versions={ImageVersion.original: original_object_key}
+                                ), loop=loop)
+                        )
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
     except Exception:

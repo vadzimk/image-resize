@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from asyncio import AbstractEventLoop
 from typing import Dict, Type, List, Callable
@@ -70,9 +71,11 @@ def unsubscribe_handler(cmd: commands.Subscribe):
 
 
 def update_project(event: events.CeleryTaskUpdated | events.OriginalUploaded):
+    update = event.message.model_dump_json()
+    logger.info(f"update_project:update: {update}")
     asyncio.run_coroutine_threadsafe(update_project_in_db(
         project_id=str(event.message.project_id),
-        update=event.message.model_dump()
+        update=json.loads(event.message.model_dump_json())
     ), loop=event.loop)
 
 
