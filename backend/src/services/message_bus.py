@@ -4,9 +4,9 @@ from typing import Union
 from ..domain import commands
 from ..domain import events
 
-Message = Union[commands.Command, events.Event]
-
 logger = logging.getLogger(__name__)
+
+Message = Union[commands.Command, events.Event]
 
 
 class MessageBus:
@@ -16,18 +16,25 @@ class MessageBus:
         self.command_handlers = command_handlers
 
     def handle_event(self, event: events.Event):
-        raise NotImplementedError()
+        logger.info(f"Handling event {event}")
+        for handler in self.event_handlers[type(event)]:
+            try:
+                handler(event)
+            except Exception:
+                logger.exception(f"Exception handling event {event}")
+                raise
 
     def handle_command(self, command: commands.Command):
-        logger.debug(f"Handling command {command}")
+        logger.info(f"Handling command {command}")
         try:
             handler = self.command_handlers[type(command)]
-            result = handler(command)
+            handler(command)
         except Exception:
             logger.exception(f"Exception handling command {command}")
             raise
 
     def handle(self, message: Message):
+        logger.info(f"bus:handle:message: {message}")
         self.queue.append(message)
         while self.queue:
             cur_message = self.queue.pop(0)

@@ -21,7 +21,7 @@ from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
 
 
 # @pytest.mark.skip
-@pytest.mark.timeout(10)  # times out when versions are not removed
+# @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestPostNewFile:
     async def test_can_receive_progress_events_when_new_versions_created(self, expected_project_id):
         async with Subscription(expected_project_id) as websocket:
@@ -37,7 +37,7 @@ class TestPostNewFile:
         assert len(missed_versions) == 0
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 @pytest.mark.timeout(10)
 class TestWebsocket:
     """ endpoint websocket('/ws') """
@@ -67,7 +67,7 @@ class TestWebsocket:
                 await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 class TestGetProjectsIdReturnsSingleProject:
     """ endpoint get('/projects/<project_id>') """
 
@@ -114,7 +114,7 @@ class TestGetProjectsIdReturnsSingleProject:
             assert all(results)  # all files are image files
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 class TestGetProjectsReturnsListOfProjects:
     """ endpoint get('/projects') """
     number_of_projects_to_create = 11

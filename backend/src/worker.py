@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 from contextlib import contextmanager
-from typing import Type
+from typing import Type, Union
 
 import pika
 from celery import Celery, shared_task
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from minio import S3Error
 from pika import PlainCredentials
 from pydantic import BaseModel
+from fastapi.encoders import jsonable_encoder
 
 from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
@@ -100,7 +101,7 @@ def create_versions(object_name_original: str):
                         progress=ProgressDetail(done=(index + 1), total=len(sizes.keys()))
                     )
 
-                    notify_client(message)
+                    notify_client(jsonable_encoder(message))
             # will close temp_input_file
     except S3Error as e:
         if e.code == "NoSuchKey":
@@ -110,10 +111,11 @@ def create_versions(object_name_original: str):
         if response is not None:
             response.close()
             response.release_conn()
-    return message
+    return jsonable_encoder(message)
 
 
-def notify_client(message: ProjectProgressSchema):
+def notify_client(message):
+    celery_logger.info(f"notify_client:message: {message}")
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         rabbitmq_channel.basic_publish(exchange='',
                                        routing_key=queue_name,
@@ -121,10 +123,14 @@ def notify_client(message: ProjectProgressSchema):
 
 
 @task_postrun.connect
-def task_postrun_handler(task_id, retval: ProjectProgressSchema | Exception, state, **kwargs):
-    if isinstance(retval, Exception):
-        retval.state = TaskState.FAILURE
-    else:
-        retval.state = state
-    notify_client(retval)
+def task_postrun_handler(task_id, retval, state, **kwargs):
     celery_logger.info(json.dumps(retval))
+    if isinstance(retval, Exception):
+        # TODO need to store task_id in database in case it fails need to notify client
+        # ProjectProgressSchema(state=TaskState.FAILURE)
+        message = {"state": TaskState.FAILURE, "error": str(retval)}
+        celery_logger.error(message)
+        notify_client(message)
+    else:
+        retval["state"] = state
+        notify_client(retval)

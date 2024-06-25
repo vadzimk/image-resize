@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from asyncio import AbstractEventLoop
 from typing import Dict, Type, List, Callable
 
 from fastapi.encoders import jsonable_encoder
@@ -32,7 +33,8 @@ async def handle_ws_confirmation(action: Callable, initial_payload: dir, schema:
 
 
 def subscribe_handler(cmd: commands.Subscribe):
-    asyncio.create_task(
+    loop = asyncio.get_running_loop()
+    loop.create_task(
         handle_ws_confirmation(
             action=lambda: ws_manager.subscribe(cmd.websocket, cmd.project_id),
             initial_payload={"action": SubscribeAction.SUBSCRIBE, "project_id": cmd.project_id},
@@ -41,7 +43,8 @@ def subscribe_handler(cmd: commands.Subscribe):
 
 
 def unsubscribe_handler(cmd: commands.Subscribe):
-    asyncio.create_task(
+    loop = asyncio.get_running_loop()
+    loop.create_task(
         handle_ws_confirmation(
             action=lambda: ws_manager.unsubscribe(cmd.websocket, cmd.project_id),
             initial_payload={"action": SubscribeAction.UNSUBSCRIBE, "project_id": cmd.project_id},
@@ -49,8 +52,17 @@ def unsubscribe_handler(cmd: commands.Subscribe):
             ws=cmd.websocket))
 
 
-event_handlers: Dict[Type[events.Event], List[Callable]] = {
+def update_project_in_db(event: events.CeleryTaskUpdated):
+    pass
 
+
+def notify_subscribers(event: events.CeleryTaskUpdated):
+    logger.info(f"handler:notify_subscribers:event: {event}")
+    asyncio.run_coroutine_threadsafe(ws_manager.publish_celery_event(event.message), loop=event.loop)
+
+
+event_handlers: Dict[Type[events.Event], List[Callable]] = {
+    events.CeleryTaskUpdated: [update_project_in_db, notify_subscribers],
 }
 
 command_handlers: Dict[Type[commands.Command], Callable] = {

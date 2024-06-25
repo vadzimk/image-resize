@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import traceback
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -8,14 +9,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from minio import S3Error
 
+from .domain.events import CeleryTaskUpdated
 from .exceptions import ProjectNotFoundError
-from .schemas import TaskState
+from .schemas import TaskState, ProjectProgressSchema
 from .services.projects_service import ProjectsService
 from .repository.projects_repository import ProjectsRepository
 from .repository.uow import UnitOfWork
 from .worker import create_versions, rabbitmq_channel_connection, queue_name
 from .websocket_manager import ws_manager
-from .api import router
+from .api import router, bus
 from .services.minio import s3, bucket_name
 
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +50,7 @@ async def update_project_in_db(project_id: str, update: dict):
             projects_service = ProjectsService(repository)
             updated = await projects_service.update_project(project_id, update)
             await uow.commit()
-            logger.info(f"Updated project {updated.dict()}")
+            logger.info(f"update_project_in_db: {updated.dict()}")
     except ProjectNotFoundError as e:
         logger.error(e)
 
@@ -70,7 +72,6 @@ def listen_create_delete_s3_events_and_publish_to_ws(loop: AbstractEventLoop):
 
 
 def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractEventLoop):
-
     async def original_update_db(original_object_key: str):
         project_id = original_object_key.split("/")[0]
         update = {
@@ -84,9 +85,9 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
     def on_original_upload(s3_object_key):
         asyncio.run_coroutine_threadsafe(original_update_db(s3_object_key), loop=loop)
         celery_task = create_versions.s(object_name_original=s3_object_key).apply_async()
-        result_project_id = celery_task.get()
-        logger.debug(
-            f"listen_create_s3_events_to_upload_versions: Celery task created task-id: {celery_task.id}, result_project_id: {result_project_id}")
+        result = celery_task.get()
+        logger.info(
+            f"listen_create_s3_events_to_upload_versions: Celery task created task-id: {celery_task.id}, result: {result}")
 
     try:
         # create file versions when original is uploaded
@@ -102,9 +103,9 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
 
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
-    except Exception as e:
-        logger.error(f"Unexpected error {e}")
-        raise e
+    except Exception:
+        logger.error(f"Unexpected error:\n{traceback.format_exc()}")
+        raise
 
 
 def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
@@ -114,15 +115,27 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
     logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish")
 
     def celery_event_callback(ch, method, properties, body):
-        logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish.callback")
-        message: dict = json.loads(body)
-        asyncio.run_coroutine_threadsafe(ws_manager.publish_celery_event(message),
-                                         loop=loop)
-        asyncio.run_coroutine_threadsafe(update_project_in_db(project_id=message.get('project_id'), update=message),
-                                         loop=loop)
+        try:
+            logger.info(f"Entered listen_celery_task_notifications_queue:celery_event_callback:body: {body}")
+            message = ProjectProgressSchema.model_validate_json(body)
+            logger.info(f"message = {message}")
+            bus.handle(CeleryTaskUpdated(message=message, loop=loop))
+
+            # asyncio.run_coroutine_threadsafe(
+            #     ws_manager.publish_celery_event(message),
+            #     loop=loop)
+
+            asyncio.run_coroutine_threadsafe(
+                update_project_in_db(
+                    project_id=message.project_id,
+                    update=message.model_dump()),
+                loop=loop)
+        except Exception:
+            logger.error(f"Rabbitmq callback error:\n{traceback.format_exc()}")
+            raise
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         logger.info(
             f"listen_celery_task_notifications_queue_to_publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
         rabbitmq_channel.basic_consume(queue=queue_name, on_message_callback=celery_event_callback, auto_ack=True)
-        rabbitmq_channel.start_consuming()
+        rabbitmq_channel.start_consuming()  # starts loop

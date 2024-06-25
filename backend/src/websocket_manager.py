@@ -32,9 +32,11 @@ class WebsocketManager:
             del self.connection_subscriptions[websocket]
 
     def subscribe(self, websocket: WebSocket, key_prefix: str):
+        logger.info(f"WebsocketManager.subscribe: {websocket}, {key_prefix}")
         if next((s for s in self.connection_subscriptions[websocket] if s.key_prefix == key_prefix), None) is not None:
             raise AlreadySubscribed()
         self.connection_subscriptions[websocket].append(Subscription(key_prefix=key_prefix))
+        logger.info(f"self.connection_subscriptions {self.connection_subscriptions}")
 
     def unsubscribe(self, websocket: WebSocket, key_prefix: str):
         if next((d for d in self.connection_subscriptions[websocket] if d.key_prefix == key_prefix), None) is None:
@@ -64,10 +66,13 @@ class WebsocketManager:
                         await conn.send_json(record)
                         break  # No need to check other prefixes if one matches (prefix is unique)
 
-    async def publish_celery_event(self, message: dict):
+    async def publish_celery_event(self, message: ProjectProgressSchema | GetProjectSchema):
+        logger.info(f"publish_celery_event: message {message} {type(message)}")
         for conn, subscriptions in self.connection_subscriptions.items():
             for sub in subscriptions:
-                if message.get("project_id") == sub.key_prefix:
+                logger.info(f"===???? {message.project_id} {message.project_id == sub.key_prefix} {sub.key_prefix}")
+                if str(message.project_id) == sub.key_prefix:
+                    logger.info(f"sending =====> {message}")
                     await conn.send_json(
                         jsonable_encoder(
                             validate_message(message, [ProjectProgressSchema, GetProjectSchema])
