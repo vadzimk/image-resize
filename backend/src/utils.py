@@ -34,3 +34,5 @@ def validate_message(message: Any, candidate_models: List[Type[BaseModel]]) -> A
     type_adapter = TypeAdapter(union_type)
     response_model = type_adapter.validate_python(message)
     return response_model
+
+

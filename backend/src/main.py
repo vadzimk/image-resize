@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from minio import S3Error
 
+from .services.handlers import update_project_in_db
 from .domain.events import CeleryTaskUpdated
 from .exceptions import ProjectNotFoundError
 from .schemas import TaskState, ProjectProgressSchema
@@ -43,16 +44,6 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(router)
 
 
-async def update_project_in_db(project_id: str, update: dict):
-    try:
-        async with UnitOfWork() as uow:
-            repository = ProjectsRepository(uow.session)
-            projects_service = ProjectsService(repository)
-            updated = await projects_service.update_project(project_id, update)
-            await uow.commit()
-            logger.info(f"update_project_in_db: {updated.dict()}")
-    except ProjectNotFoundError as e:
-        logger.error(e)
 
 
 # TODO remove this listener no need in publishing to the client websocket connections about file upload events
@@ -125,11 +116,11 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
             #     ws_manager.publish_celery_event(message),
             #     loop=loop)
 
-            asyncio.run_coroutine_threadsafe(
-                update_project_in_db(
-                    project_id=message.project_id,
-                    update=message.model_dump()),
-                loop=loop)
+            # asyncio.run_coroutine_threadsafe(
+            #     update_project_in_db(
+            #         project_id=message.project_id,
+            #         update=message.model_dump()),
+            #     loop=loop)
         except Exception:
             logger.error(f"Rabbitmq callback error:\n{traceback.format_exc()}")
             raise
