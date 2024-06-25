@@ -10,9 +10,9 @@ from fastapi import FastAPI
 from minio import S3Error
 
 from .services.handlers import update_project_in_db
-from .domain.events import CeleryTaskUpdated
+from .domain.events import CeleryTaskUpdated, OriginalUploaded
 from .exceptions import ProjectNotFoundError
-from .schemas import TaskState, ProjectProgressSchema
+from .schemas import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion
 from .services.projects_service import ProjectsService
 from .repository.projects_repository import ProjectsRepository
 from .repository.uow import UnitOfWork
@@ -42,8 +42,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(router)
-
-
 
 
 # TODO remove this listener no need in publishing to the client websocket connections about file upload events
@@ -90,8 +88,16 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
                     logger.debug(f'listen_create_s3_events_to_upload_versions: {record["eventName"]}: {s3_object_key}')
                     if s3_object_key.rsplit(".")[0].endswith("_original"):
                         logger.debug(f"listen_create_s3_events_to_upload_versions: found original {s3_object_key}")
+                        original_object_key = s3_object_key
                         on_original_upload(s3_object_key)
-
+                        # bus.handle(
+                        #     OriginalUploaded(
+                        #         message=GetProjectSchema(
+                        #             project_id=original_object_key.split("/")[0],
+                        #             state=TaskState.GOTORIGINAL,
+                        #             versions={ImageVersion.original: original_object_key}
+                        #         ), loop=loop)
+                        # )
     except S3Error as err:
         logger.error(f"S3 Error: {err}")
     except Exception:

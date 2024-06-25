@@ -124,7 +124,6 @@ def notify_client(message):
 
 @task_postrun.connect
 def task_postrun_handler(task_id, retval, state, **kwargs):
-    celery_logger.info(json.dumps(retval))
     if isinstance(retval, Exception):
         # TODO need to store task_id in database in case it fails need to notify client
         # ProjectProgressSchema(state=TaskState.FAILURE)
@@ -132,5 +131,6 @@ def task_postrun_handler(task_id, retval, state, **kwargs):
         celery_logger.error(message)
         notify_client(message)
     else:
+        celery_logger.info(json.dumps(retval))
         retval["state"] = state
         notify_client(retval)
