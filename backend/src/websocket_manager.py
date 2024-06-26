@@ -44,28 +44,6 @@ class WebsocketManager:
         self.connection_subscriptions[websocket] = [s for s in self.connection_subscriptions[websocket] if
                                                     s.key_prefix != key_prefix]
 
-    # TODO make private - only used for testing
-    async def broadcast(self, message: dict):  # sends all messages to all connections
-        connections = list(self.connection_subscriptions.keys())
-        logger.debug(f"Entered async broadcast, connections_length: {len(connections)}: {connections}")
-        for conn in connections:
-            try:
-                await conn.send_json(message)
-                logger.debug(f"Sent Broadcast to {conn} : {message}")
-            except Exception as e:
-                logger.error(e)
-                raise e
-
-    # TODO make private or remove - only used for testing
-    async def publish_s3_event(self, message: dict):  # sends message to subscribed connections
-        for conn, subscriptions in self.connection_subscriptions.items():
-            for sub in subscriptions:
-                for record in message.get("Records", []):
-                    record_key = record["s3"]["object"]["key"]
-                    if record_key.startswith(sub.key_prefix):
-                        await conn.send_json(record)
-                        break  # No need to check other prefixes if one matches (prefix is unique)
-
     async def publish_celery_event(self, message: ProjectProgressSchema | GetProjectSchema | ProjectFailureSchema):
         logger.debug(f"publish_celery_event: message {message} {type(message)}")
         for conn, subscriptions in self.connection_subscriptions.items():
