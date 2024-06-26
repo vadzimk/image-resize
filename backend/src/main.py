@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import traceback
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
@@ -75,14 +76,20 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
 async def lifespan(app: FastAPI):
     # before yield: same as @app.on_event('startup')
     loop = asyncio.get_event_loop()
-    listeners: List[Callable] = [listen_create_s3_events_and_update_db_and_start_celery_tasks,
-                                 listen_celery_task_notifications_queue]
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        for listener in listeners:
-            executor.submit(listener, loop)
-        yield
-        # after yield: same as @app.on_event('shutdown')
-        executor.shutdown(wait=False)
+    listeners: List[Callable] = [
+        listen_create_s3_events_and_update_db_and_start_celery_tasks,
+        listen_celery_task_notifications_queue
+    ]
+    threads = []
+    for listener in listeners:
+        thread = threading.Thread(target=listener, args=(loop,))
+        thread.daemon = True  # shuts down threads when main shuts down
+        thread.start()
+        threads.append(thread)
+    yield
+    # after yield: same as @app.on_event('shutdown')
+    for thread in threads:
+        thread.join(timeout=1)
 
 
 app = FastAPI(lifespan=lifespan)
