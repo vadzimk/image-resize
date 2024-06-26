@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Dict, Optional
@@ -6,9 +7,12 @@ from typing import List, Tuple, Any, Dict, Optional
 from fastapi.encoders import jsonable_encoder
 from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo import ReturnDocument
+from dotenv import load_dotenv
 
 from ..exceptions import ProjectNotFoundError
 from ..domain.model import ProjectDOM
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +42,10 @@ class ProjectsRepositoryInterface(ABC):
 class ProjectsRepository(ProjectsRepositoryInterface):
     def __init__(self, session: AsyncIOMotorClientSession):
         self.session = session
-        self.projects_database = self.session.client["projects_database"]  # creates if not exist TODO replace by env
-        self.projects_collection = self.projects_database["projects"]  # creates if not exist
+        self.projects_database = self.session.client[
+            os.getenv("MONGO_DATABASE_NAME", "projects_database")]
+        self.projects_collection = self.projects_database[
+            os.getenv("MONGO_COLLECTION_NAME", "projects")]  # creates if not exist
 
     async def list(self,
                    skip: Optional[int] = 0,

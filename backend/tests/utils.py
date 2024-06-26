@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 from typing import Tuple, List
+
+from dotenv import load_dotenv
 from minio.deleteobjects import DeleteObject
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.testclient import TestClient
@@ -14,6 +16,7 @@ from ..src.main import app
 from ..src.schemas import ProjectCreatedSchema
 from ..src.services.minio import s3, bucket_name
 
+load_dotenv()
 client = TestClient(app)
 
 
@@ -63,8 +66,10 @@ def cleanup_s3_objects(objects: List[str]):
 async def cleanup_mongodb(project_id: str | None = None):
     mongo_client = AsyncIOMotorClient(os.getenv("MONGO_DETAILS", "mongodb://localhost:27017"))
     session = await mongo_client.start_session()
-    projects_database = session.client["projects_database"]  # TODO replace by env
-    projects_collection = projects_database["projects"]
+    projects_database = session.client[
+            os.getenv("MONGO_DATABASE_NAME", "projects_database")]
+    projects_collection = projects_database[
+            os.getenv("MONGO_COLLECTION_NAME", "projects")]
     print("cleanup_mongodb:project_id:", project_id)
     if project_id is not None:
         await projects_collection.delete_one({"project_id": project_id})
