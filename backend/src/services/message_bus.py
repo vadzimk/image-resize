@@ -61,7 +61,7 @@ class MessageBus:
 
 
 def create_bus() -> MessageBus:
-    dependencies: Dict[str, Callable] = {}  # for future use
+    dependencies: Dict[str, Callable] = {}  # for future use, additional instantiated dependencies that are passed to handlers as kwargs
     injected_event_handlers = {
         event_type: [inject_dependencies(handler, dependencies) for handler in event_handlers]
         for event_type, event_handlers in handlers.event_handlers.items()

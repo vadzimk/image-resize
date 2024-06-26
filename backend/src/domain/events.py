@@ -1,7 +1,6 @@
-from asyncio import AbstractEventLoop
 from dataclasses import dataclass
 
-from ..schemas import ProjectProgressSchema, GetProjectSchema
+from ..schemas import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
 
 
 class Event:
@@ -14,6 +13,10 @@ class CeleryTaskUpdated(Event):
 
 
 @dataclass
+class CeleryTaskFailed(Event):
+    message: ProjectFailureSchema
+
+
+@dataclass
 class OriginalUploaded(Event):
     message: GetProjectSchema
-

@@ -16,6 +16,8 @@ class ProjectDOM:
                  project_id: uuid.UUID,
                  pre_signed_url: str,
                  state: Optional[TaskState] = None,
+                 error: Optional[str] = None,
+                 celery_task_id: Optional[str] = None,
                  versions: Optional[Dict[ImageVersion, str]] = None,
                  progress: Optional[ProgressDetail] = None):
         if versions is None:
@@ -23,6 +25,8 @@ class ProjectDOM:
         self.project_id = project_id
         self.pre_signed_url = pre_signed_url
         self.state = state
+        self.error = error
+        self.celery_task_id = celery_task_id
         self.versions = versions
         self.progress = progress
 

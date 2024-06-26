@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette.websockets import WebSocket
 
 from .utils import validate_message
-from .schemas import ProjectProgressSchema, GetProjectSchema
+from .schemas import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
 from .exceptions import AlreadySubscribed, NotInSubscriptions
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class WebsocketManager:
         if next((s for s in self.connection_subscriptions[websocket] if s.key_prefix == key_prefix), None) is not None:
             raise AlreadySubscribed()
         self.connection_subscriptions[websocket].append(Subscription(key_prefix=key_prefix))
-        logger.info(f"self.connection_subscriptions {self.connection_subscriptions}")
+        logger.debug(f"self.connection_subscriptions {self.connection_subscriptions}")
 
     def unsubscribe(self, websocket: WebSocket, key_prefix: str):
         if next((d for d in self.connection_subscriptions[websocket] if d.key_prefix == key_prefix), None) is None:
@@ -66,16 +66,16 @@ class WebsocketManager:
                         await conn.send_json(record)
                         break  # No need to check other prefixes if one matches (prefix is unique)
 
-    async def publish_celery_event(self, message: ProjectProgressSchema | GetProjectSchema):
-        logger.info(f"publish_celery_event: message {message} {type(message)}")
+    async def publish_celery_event(self, message: ProjectProgressSchema | GetProjectSchema | ProjectFailureSchema):
+        logger.debug(f"publish_celery_event: message {message} {type(message)}")
         for conn, subscriptions in self.connection_subscriptions.items():
             for sub in subscriptions:
-                logger.info(f"===???? {message.project_id} {message.project_id == sub.key_prefix} {sub.key_prefix}")
+                logger.debug(f"===???? {message.project_id} {message.project_id == sub.key_prefix} {sub.key_prefix}")
                 if str(message.project_id) == sub.key_prefix:
-                    logger.info(f"sending =====> {message}")
+                    logger.debug(f"sending =====> {message}")
                     await conn.send_json(
                         jsonable_encoder(
-                            validate_message(message, [ProjectProgressSchema, GetProjectSchema])
+                            validate_message(message, [ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema])
                         ))
                     break
 

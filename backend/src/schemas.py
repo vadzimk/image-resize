@@ -17,6 +17,7 @@ class ProjectCreatedSchema(CreateProjectSchema):
 class TaskState(str, Enum):
     INITIATE = "INITIATE"
     GOTORIGINAL = "GOTORIGINAL"
+    STARTED = "STARTED"
     PROGRESS = "PROGRESS"
     SUCCESS = "SUCCESS"
     FAILURE = "FAILURE"
@@ -52,7 +53,7 @@ class ProjectProgressSchema(GetProjectSchema):
 
 
 class ProjectFailureSchema(BaseModel):
-    # TODO when storing celery task id in db is implemented, remove and use ProjectProgress schema
+    task_id: str
     state: TaskState
     error: str
 

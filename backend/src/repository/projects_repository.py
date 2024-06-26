@@ -3,6 +3,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Dict, Optional
 
+from fastapi.encoders import jsonable_encoder
 from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo import ReturnDocument
 
@@ -60,8 +61,8 @@ class ProjectsRepository(ProjectsRepositoryInterface):
 
     async def update(self, project_id: str, update: dict) -> dict:
         document: dict = await self.projects_collection.find_one_and_update(
-            filter={"project_id": project_id},
-            update={"$set": update},
+            filter={"project_id": str(project_id)},
+            update={"$set": jsonable_encoder(update)},
             return_document=ReturnDocument.AFTER
         )
         logger.debug(f"ProjectsRepository:update: {document}")

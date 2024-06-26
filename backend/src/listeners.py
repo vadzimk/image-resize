@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractEventLoop):
-    def handle_s3_event(event):
+    def handle_s3_event(event: dict):
         for record in event.get("Records", []):
             s3_object_key = record["s3"]["object"]["key"]
             logger.debug(f'listen_create_s3_events_to_upload_versions: {record["eventName"]}: {s3_object_key}')
@@ -53,9 +53,9 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
 
     def celery_event_callback(ch, method, properties, body):
         try:
-            logger.info(f"Entered listen_celery_task_notifications_queue:celery_event_callback:body: {body}")
+            logger.debug(f"Entered listen_celery_task_notifications_queue:celery_event_callback:body: {body}")
             message = validate_message(json.loads(body), [ProjectProgressSchema, ProjectFailureSchema])
-            logger.info(f"message = {message}")
+            logger.debug(f"message = {message}")
             bus.handle(CeleryTaskUpdated(message=message))
 
         except Exception:
@@ -63,7 +63,7 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
             raise
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
-        logger.info(
+        logger.debug(
             f"listen_celery_task_notifications_queue_to_publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
         rabbitmq_channel.basic_consume(queue=queue_name, on_message_callback=celery_event_callback, auto_ack=True)
         rabbitmq_channel.start_consuming()  # starts loop

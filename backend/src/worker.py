@@ -16,7 +16,7 @@ from fastapi.encoders import jsonable_encoder
 
 from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
-from .schemas import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion
+from .schemas import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion, ProjectFailureSchema
 from .services.minio import s3, bucket_name
 from .services.resize_service import resize_with_aspect_ratio
 
@@ -69,7 +69,7 @@ def rabbitmq_channel_connection():
 
 @shared_task
 @timethis
-def create_versions(object_name_original: str):
+def create_versions(object_name_original: str) -> ProjectProgressSchema:
     project_id, basename = object_name_original.rsplit("/")
     basename_wo_ext, ext = basename.rsplit(".")
     input_file_name_less = basename_wo_ext.replace("_original", "")
@@ -103,7 +103,7 @@ def create_versions(object_name_original: str):
                         progress=ProgressDetail(done=(index + 1), total=len(sizes.keys()))
                     )
 
-                    notify_client(jsonable_encoder(message))
+                    notify_client(message)
             # will close temp_input_file
     except S3Error as e:
         if e.code == "NoSuchKey":
@@ -113,7 +113,7 @@ def create_versions(object_name_original: str):
         if response is not None:
             response.close()
             response.release_conn()
-    return jsonable_encoder(message)
+    return message
 
 
 def notify_client(message):
@@ -121,15 +121,13 @@ def notify_client(message):
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         rabbitmq_channel.basic_publish(exchange='',
                                        routing_key=queue_name,
-                                       body=json.dumps(message))
+                                       body=json.dumps(jsonable_encoder(message)))
 
 
 @task_postrun.connect
 def task_postrun_handler(task_id, retval, state, **kwargs):
     if isinstance(retval, Exception):
-        # TODO need to store task_id in database in case it fails need to notify client
-        # ProjectProgressSchema(state=TaskState.FAILURE)
-        message = {"state": TaskState.FAILURE, "error": str(retval)}
+        message = ProjectFailureSchema(task_id=task_id, state=TaskState.FAILURE, error=str(retval))
         celery_logger.error(message)
         notify_client(message)
     else:

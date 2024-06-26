@@ -184,6 +184,9 @@ components:
               type: string
         state:
           enum:
+            - INITIATE
+            - GOTORIGINAL
+            - STARTED
             - PROGRESS
             - SUCCESS
             - FAILURE
