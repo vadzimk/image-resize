@@ -36,11 +36,11 @@ class MessageBus:
                 logger.exception(f"Exception handling event {event}")
                 raise
 
-    def _handle_command(self, command: commands.Command):
+    async def _handle_command(self, command: commands.Command):
         logger.info(f"Handling command {command}")
         try:
             handler = self.command_handlers[type(command)]
-            handler(command)
+            await handler(command)
         except Exception:
             logger.exception(f"Exception handling command {command}")
             raise
@@ -54,7 +54,8 @@ class MessageBus:
                 asyncio.run_coroutine_threadsafe(
                     self._handle_event(cur_message), loop=self.loop)
             elif isinstance(cur_message, commands.Command):
-                self._handle_command(cur_message)
+                asyncio.run_coroutine_threadsafe(
+                    self._handle_command(cur_message), loop=self.loop)
             else:
                 raise Exception(f"`message` must be instance of Event or Command got {type(message)}")
 

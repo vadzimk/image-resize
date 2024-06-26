@@ -49,24 +49,20 @@ async def handle_ws_confirmation(action: Callable, initial_payload: dir, schema:
             ))
 
 
-def subscribe_handler(cmd: commands.Subscribe):
-    loop = asyncio.get_running_loop()
-    loop.create_task(
-        handle_ws_confirmation(
-            action=lambda: ws_manager.subscribe(cmd.websocket, cmd.project_id),
-            initial_payload={"action": SubscribeAction.SUBSCRIBE, "project_id": cmd.project_id},
-            schema=OnSubscribeSchema,
-            ws=cmd.websocket))
+async def subscribe_handler(cmd: commands.Subscribe):
+    await handle_ws_confirmation(
+        action=lambda: ws_manager.subscribe(cmd.websocket, cmd.project_id),
+        initial_payload={"action": SubscribeAction.SUBSCRIBE, "project_id": cmd.project_id},
+        schema=OnSubscribeSchema,
+        ws=cmd.websocket)
 
 
-def unsubscribe_handler(cmd: commands.Subscribe):
-    loop = asyncio.get_running_loop()
-    loop.create_task(
-        handle_ws_confirmation(
+async def unsubscribe_handler(cmd: commands.Subscribe):
+    await handle_ws_confirmation(
             action=lambda: ws_manager.unsubscribe(cmd.websocket, cmd.project_id),
             initial_payload={"action": SubscribeAction.UNSUBSCRIBE, "project_id": cmd.project_id},
             schema=OnSubscribeSchema,
-            ws=cmd.websocket))
+            ws=cmd.websocket)
 
 
 async def update_project_handler(event: events.CeleryTaskUpdated | events.OriginalUploaded):
