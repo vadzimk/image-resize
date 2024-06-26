@@ -51,6 +51,12 @@ class ProjectProgressSchema(GetProjectSchema):
     progress: ProgressDetail
 
 
+class ProjectFailureSchema(BaseModel):
+    # TODO when storing celery task id in db is implemented, remove and use ProjectProgress schema
+    state: TaskState
+    error: str
+
+
 class SubscribeAction(str, Enum):
     SUBSCRIBE = "SUBSCRIBE"
     UNSUBSCRIBE = "UNSUBSCRIBE"

@@ -50,16 +50,18 @@ queue_name = "task_notifications"  # also called routing_key or channel or event
 
 @contextmanager
 def rabbitmq_channel_connection():
+    rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(
+        host="127.0.0.1",
+        port=5672,
+        credentials=PlainCredentials(username="guest", password="guest")))
+    rabbitmq_channel = rabbitmq_connection.channel()
+    rabbitmq_channel.queue_declare(queue=queue_name)
     try:
-        rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(
-            host="127.0.0.1",
-            port=5672,
-            credentials=PlainCredentials(username="guest", password="guest")))
-        rabbitmq_channel = rabbitmq_connection.channel()
-        rabbitmq_channel.queue_declare(queue=queue_name)
         yield rabbitmq_channel, rabbitmq_connection
     finally:
         if "rabbitmq_channel" in locals() and rabbitmq_channel.is_open:
+            requeued_messages = rabbitmq_channel.cancel()
+            celery_logger.warning(f"Requeued messages {requeued_messages}")
             rabbitmq_channel.close()
         if "rabbitmq_connection" in locals() and rabbitmq_connection.is_open:
             rabbitmq_connection.close()

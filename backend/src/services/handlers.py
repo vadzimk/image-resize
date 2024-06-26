@@ -69,22 +69,21 @@ def unsubscribe_handler(cmd: commands.Subscribe):
             ws=cmd.websocket))
 
 
-def update_project(event: events.CeleryTaskUpdated | events.OriginalUploaded):
+async def update_project_handler(event: events.CeleryTaskUpdated | events.OriginalUploaded):
     update = event.message.model_dump_json()
     logger.info(f"update_project:update: {update}")
-    asyncio.run_coroutine_threadsafe(update_project_in_db(
+    await update_project_in_db(
         project_id=str(event.message.project_id),
         update=json.loads(event.message.model_dump_json())
-    ), loop=event.loop)
+    )
 
 
-def notify_subscribers(event: events.CeleryTaskUpdated):
+async def notify_subscribers_handler(event: events.CeleryTaskUpdated):
     logger.info(f"handler:notify_subscribers:event: {event}")
-    asyncio.run_coroutine_threadsafe(
-        ws_manager.publish_celery_event(event.message), loop=event.loop)
+    await ws_manager.publish_celery_event(event.message)
 
 
-def start_celery_task(event: events.OriginalUploaded):
+async def start_celery_task_handler(event: events.OriginalUploaded):
     celery_task = create_versions.s(
         object_name_original=event.message.versions.get(ImageVersion.original)).apply_async()
     result = celery_task.get()
@@ -93,8 +92,8 @@ def start_celery_task(event: events.OriginalUploaded):
 
 
 event_handlers: Dict[Type[events.Event], List[Callable]] = {
-    events.CeleryTaskUpdated: [update_project, notify_subscribers],
-    events.OriginalUploaded: [update_project, start_celery_task]
+    events.CeleryTaskUpdated: [update_project_handler, notify_subscribers_handler],
+    events.OriginalUploaded: [update_project_handler, start_celery_task_handler]
 }
 
 command_handlers: Dict[Type[commands.Command], Callable] = {

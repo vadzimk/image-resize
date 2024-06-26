@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import traceback
@@ -8,9 +9,9 @@ from fastapi import APIRouter
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from .services.message_bus import bus
 from .domain.model import ProjectDOM
 from .services.handlers import command_handlers
-from .bootstrap import bootstrap
 from .domain import commands
 from .services.minio import get_presigned_url_get
 from .repository.uow import UnitOfWork
@@ -28,7 +29,6 @@ from .utils import validate_message
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-bus = bootstrap()
 
 
 def s3_object_names_to_urls(versions: dict) -> dict:

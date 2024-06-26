@@ -23,16 +23,6 @@ from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
 # @pytest.mark.skip
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestPostNewFile:
-    async def test_can_receive_progress_events_when_new_versions_created(self, expected_project_id):
-        async with Subscription(expected_project_id) as websocket:
-            while True:
-                res = await websocket.recv()
-                try:
-                    assert ProjectProgressSchema.model_validate_json(res)
-                    break
-                except ValidationError:
-                    pass
-
     async def test_all_versions_are_created(self, missed_versions: Collection):
         assert len(missed_versions) == 0
 

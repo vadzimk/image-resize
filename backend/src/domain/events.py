@@ -11,11 +11,9 @@ class Event:
 @dataclass
 class CeleryTaskUpdated(Event):
     message: ProjectProgressSchema
-    loop: AbstractEventLoop
 
 
 @dataclass
 class OriginalUploaded(Event):
     message: GetProjectSchema
-    loop: AbstractEventLoop
 
