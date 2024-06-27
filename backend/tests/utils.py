@@ -11,10 +11,11 @@ from websockets import connect
 import httpx
 from PIL import Image
 
+from ..src.settings import server_settings
 from .exceptions import FileUploadFailed
 from ..src.main import app
 from ..src.schemas import ProjectCreatedSchema
-from ..src.services.minio import s3, bucket_name
+from ..src.services.minio import s3
 
 load_dotenv()
 client = TestClient(app)
@@ -57,19 +58,17 @@ def cleanup_s3_objects(objects: List[str]):
     deletes s3 objects form minio storage
     :param objects: list of str of format "e4302caa-dbd7-4743-ba09-241bd48e35f3/photo_original.jpeg"
     """
-    errors = s3.remove_objects(bucket_name, [DeleteObject(obj) for obj in objects])
+    errors = s3.remove_objects(server_settings.MINIO_BUCKET_NAME, [DeleteObject(obj) for obj in objects])
     if len(list(errors)) != 0:
         raise AssertionError
     print(f"cleanup_s3_objects: Done. Deleted {len(objects)} objects.")
 
 
 async def cleanup_mongodb(project_id: str | None = None):
-    mongo_client = AsyncIOMotorClient(os.getenv("MONGO_DETAILS", "mongodb://localhost:27017"))
+    mongo_client = AsyncIOMotorClient(server_settings.MONGO_DETAILS)
     session = await mongo_client.start_session()
-    projects_database = session.client[
-            os.getenv("MONGO_DATABASE_NAME", "projects_database")]
-    projects_collection = projects_database[
-            os.getenv("MONGO_COLLECTION_NAME", "projects")]
+    projects_database = session.client[server_settings.MONGO_DATABASE_NAME]
+    projects_collection = projects_database[server_settings.MONGO_COLLECTION_NAME]
     print("cleanup_mongodb:project_id:", project_id)
     if project_id is not None:
         await projects_collection.delete_one({"project_id": project_id})
@@ -81,7 +80,7 @@ async def cleanup_mongodb(project_id: str | None = None):
 
 async def cleanup_project(project_id: str | None = None):
     all_objects_to_delete = list(
-        s3.list_objects(bucket_name=bucket_name,
+        s3.list_objects(bucket_name=server_settings.MINIO_BUCKET_NAME,
                         prefix=None if project_id is None else str(project_id),
                         recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_to_delete])

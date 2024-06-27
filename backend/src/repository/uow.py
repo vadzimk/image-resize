@@ -1,13 +1,14 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-import os
 from dotenv import load_dotenv
+
+from ..settings import server_settings
 
 load_dotenv()
 
 
 class UnitOfWork:
     def __init__(self):
-        self.mongo_client = AsyncIOMotorClient(os.getenv("MONGO_DETAILS", "mongodb://localhost:27017"))
+        self.mongo_client = AsyncIOMotorClient(server_settings.MONGO_DETAILS)
         self.session = None
 
     async def __aenter__(self) -> 'UnitOfWork':

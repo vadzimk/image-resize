@@ -1,5 +1,4 @@
 import logging
-import os
 import uuid
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Dict, Optional
@@ -9,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo import ReturnDocument
 from dotenv import load_dotenv
 
+from ..settings import server_settings
 from ..exceptions import ProjectNotFoundError
 from ..domain.model import ProjectDOM
 
@@ -42,10 +42,8 @@ class ProjectsRepositoryInterface(ABC):
 class ProjectsRepository(ProjectsRepositoryInterface):
     def __init__(self, session: AsyncIOMotorClientSession):
         self.session = session
-        self.projects_database = self.session.client[
-            os.getenv("MONGO_DATABASE_NAME", "projects_database")]
-        self.projects_collection = self.projects_database[
-            os.getenv("MONGO_COLLECTION_NAME", "projects")]  # creates if not exist
+        self.projects_database = self.session.client[server_settings.MONGO_DATABASE_NAME]
+        self.projects_collection = self.projects_database[server_settings.MONGO_COLLECTION_NAME]  # creates if not exist
 
     async def list(self,
                    skip: Optional[int] = 0,

@@ -2,30 +2,26 @@ import json
 import os
 import tempfile
 from contextlib import contextmanager
-from typing import Type, Union
 
 import pika
 from celery import Celery, shared_task
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
-from dotenv import load_dotenv
 from minio import S3Error
-from pika import PlainCredentials
-from pydantic import BaseModel
 from fastapi.encoders import jsonable_encoder
 
+from .settings import server_settings
 from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
 from .schemas import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion, ProjectFailureSchema
-from .services.minio import s3, bucket_name
+from .services.minio import s3
 from .services.resize_service import resize_with_aspect_ratio
 
-load_dotenv()
 
 celery = Celery(__name__,
-                broker=os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@127.0.0.1:5672"),
-                backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0"),
-                include=["src.main"]  # other modules used by celery to include
+                broker=server_settings.CELERY_BROKER_URL,
+                backend=server_settings.CELERY_RESULT_BACKEND,
+                include=["src.main", "src.settings"]  # other modules used by celery to include
                 )
 
 
@@ -50,10 +46,7 @@ queue_name = "task_notifications"  # also called routing_key or channel or event
 
 @contextmanager
 def rabbitmq_channel_connection():
-    rabbitmq_connection = pika.BlockingConnection(pika.ConnectionParameters(
-        host="127.0.0.1",
-        port=5672,
-        credentials=PlainCredentials(username="guest", password="guest")))
+    rabbitmq_connection = pika.BlockingConnection(pika.URLParameters(server_settings.CELERY_BROKER_URL))
     rabbitmq_channel = rabbitmq_connection.channel()
     rabbitmq_channel.queue_declare(queue=queue_name)
     try:
@@ -82,7 +75,7 @@ def create_versions(object_name_original: str) -> ProjectProgressSchema:
     versions = {ImageVersion.original: object_name_original}
     response = None
     try:
-        response = s3.get_object(bucket_name=bucket_name, object_name=object_name_original)
+        response = s3.get_object(bucket_name=server_settings.MINIO_BUCKET_NAME, object_name=object_name_original)
         # Read data from response.
         with tempfile.NamedTemporaryFile(delete=True) as temp_input_file:
             temp_input_file.write(response.data)
@@ -93,7 +86,7 @@ def create_versions(object_name_original: str) -> ProjectProgressSchema:
                     resize_with_aspect_ratio(temp_input_file, destination_temp_path,
                                              size_value)  # must use temporary file
                     object_name = f"{project_id}/{input_file_name_less}_{size_key}.{ext}"
-                    s3.fput_object(bucket_name=bucket_name, object_name=object_name, file_path=destination_temp_path)
+                    s3.fput_object(bucket_name=server_settings.MINIO_BUCKET_NAME, object_name=object_name, file_path=destination_temp_path)
                     versions[size_key] = object_name
 
                     message = ProjectProgressSchema(
@@ -107,8 +100,8 @@ def create_versions(object_name_original: str) -> ProjectProgressSchema:
             # will close temp_input_file
     except S3Error as e:
         if e.code == "NoSuchKey":
-            celery_logger.error(f"Object {object_name_original} does not exist in bucket {bucket_name}")
-        raise S3ObjectNotFoundError(object_name_original, bucket_name) from e
+            celery_logger.error(f"Object {object_name_original} does not exist in bucket {server_settings.MINIO_BUCKET_NAME}")
+        raise S3ObjectNotFoundError(object_name_original, server_settings.MINIO_BUCKET_NAME) from e
     finally:
         if response is not None:
             response.close()

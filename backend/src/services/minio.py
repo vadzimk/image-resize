@@ -1,18 +1,15 @@
-import os
 from datetime import timedelta
 
-from dotenv import load_dotenv
 from minio import Minio
 
-load_dotenv()
-MINIO_HOSTNAME = "localhost:9000"
-bucket_name = "images"
+from ..settings import server_settings
+
 
 s3 = Minio(
-    MINIO_HOSTNAME,
+    endpoint=server_settings.MINIO_HOSTNAME,
+    access_key=server_settings.MINIO_ROOT_USER,
+    secret_key=server_settings.MINIO_ROOT_PASSWORD,
     secure=False,
-    access_key=os.getenv("MINIO_ROOT_USER"),
-    secret_key=os.getenv("MINIO_ROOT_PASSWORD")
 )
 
 
@@ -24,7 +21,7 @@ def make_bucket_if_not_exist(bucket_name: str):
 def get_presigned_url_put(object_name):
     url = s3.get_presigned_url(
         "PUT",
-        bucket_name,
+        server_settings.MINIO_BUCKET_NAME,
         object_name,
         expires=timedelta(days=1),
         # response_headers={"response-content-type": "application/json"},
@@ -38,7 +35,7 @@ def get_presigned_url_get(object_name:str):
         "response-content-disposition": f'attachment; filename="{object_name.replace("/", "_")}"'
     }
     url = s3.presigned_get_object(
-        bucket_name,
+        server_settings.MINIO_BUCKET_NAME,
         object_name,
         expires=timedelta(days=7),
         response_headers=response_headers
@@ -46,4 +43,4 @@ def get_presigned_url_get(object_name:str):
     return url
 
 
-make_bucket_if_not_exist(bucket_name)
+make_bucket_if_not_exist(server_settings.MINIO_BUCKET_NAME)

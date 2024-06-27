@@ -6,8 +6,9 @@ from typing import Callable, List
 
 from fastapi import FastAPI
 
+from .settings import server_settings
 from .api import router
-from .services.minio import s3, bucket_name
+from .services.minio import s3
 from .services.message_bus import bus
 from .listeners import (
     listen_create_s3_events_and_update_db_and_start_celery_tasks,
@@ -15,7 +16,7 @@ from .listeners import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.info(f"Minio: {'connected' if s3.bucket_exists(bucket_name) else 'NOT connected'}")
+logger.info(f"Minio: {'connected' if s3.bucket_exists(server_settings.MINIO_BUCKET_NAME) else 'NOT connected'}")
 
 
 @asynccontextmanager

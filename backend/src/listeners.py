@@ -5,12 +5,13 @@ from minio import S3Error
 import traceback
 from asyncio import AbstractEventLoop
 
+from .settings import server_settings
 from .utils import validate_message
 from .services.message_bus import bus
 from .domain.events import CeleryTaskUpdated, OriginalUploaded
 from .schemas import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, ProjectFailureSchema
 from .worker import rabbitmq_channel_connection, queue_name
-from .services.minio import s3, bucket_name
+from .services.minio import s3
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
 
     try:
         # create file versions when original is uploaded
-        with s3.listen_bucket_notification(bucket_name=bucket_name, events=["s3:ObjectCreated:*"]) as events:
+        with s3.listen_bucket_notification(bucket_name=server_settings.MINIO_BUCKET_NAME, events=["s3:ObjectCreated:*"]) as events:
             logger.debug("ENTERED listen_create_s3_events_and_update_db_and_start_celery_tasks")
             for event in events:
                 handle_s3_event(event)
