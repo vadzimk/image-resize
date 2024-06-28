@@ -6,7 +6,7 @@ import uuid
 from dataclasses import asdict
 from typing import Optional, Dict
 
-from ..request_model import TaskState, ProgressDetail, ImageVersion
+from ..request.request_model import TaskState, ProgressDetail, ImageVersion
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,11 @@ from fastapi.encoders import jsonable_encoder
 from .settings import server_settings
 from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
-from .request_model import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion, ProjectFailureSchema
+from .models.request.request_model import (TaskState,
+                                           ProjectProgressSchema,
+                                           ProgressDetail,
+                                           ImageVersion,
+                                           ProjectFailureSchema)
 from .services.minio import s3
 from .services.resize_service import resize_with_aspect_ratio
 

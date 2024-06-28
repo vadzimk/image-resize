@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from ..request_model import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
+from ..request.request_model import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
 
 
 class Event:

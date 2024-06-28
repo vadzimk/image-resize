@@ -3,9 +3,9 @@ import uuid
 from typing import List, Optional, Tuple, Any, Dict
 
 from .minio import get_presigned_url_put
-from ..request_model import CreateProjectSchema, TaskState
+from ..models.request.request_model import CreateProjectSchema, TaskState
 from ..repository.projects_repository import ProjectsRepositoryInterface
-from ..domain.object_model import ProjectDOM
+from ..models.domain.object_model import ProjectDOM
 
 logger = logging.getLogger(__name__)
 

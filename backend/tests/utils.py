@@ -14,7 +14,7 @@ from PIL import Image
 from ..src.settings import server_settings
 from .exceptions import FileUploadFailed
 from ..src.main import app
-from ..src.request_model import ProjectCreatedSchema
+from ..src.models.request.request_model import ProjectCreatedSchema
 from ..src.services.minio import s3
 
 load_dotenv()

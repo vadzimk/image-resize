@@ -9,20 +9,20 @@ from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from .services.message_bus import bus
-from .domain.object_model import ProjectDOM
+from .models.domain.object_model import ProjectDOM
 from .services.handlers import command_handlers
-from .domain import commands
+from .models.domain import commands
 from .services.minio import get_presigned_url_get
 from .repository.uow import UnitOfWork
 from .repository.projects_repository import ProjectsRepository
 from .services.projects_service import ProjectsService
 from .websocket_manager import ws_manager
-from .request_model import (ProjectCreatedSchema,
-                            CreateProjectSchema,
-                            GetProjectSchema,
-                            SubscribeSchema,
-                            GetProjectsSchema,
-                            )
+from .models.request.request_model import (ProjectCreatedSchema,
+                                          CreateProjectSchema,
+                                          GetProjectSchema,
+                                          SubscribeSchema,
+                                          GetProjectsSchema,
+                                          )
 
 from .utils import validate_message
 

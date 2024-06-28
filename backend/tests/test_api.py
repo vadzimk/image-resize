@@ -8,7 +8,6 @@ from typing import Collection
 import httpx
 import pytest
 from httpx import Response
-from pydantic import ValidationError
 from starlette.testclient import TestClient
 
 from .utils import (Subscription,
@@ -17,7 +16,7 @@ from .utils import (Subscription,
                     is_image
                     )
 
-from ..src.request_model import GetProjectSchema, ImageVersion, ProjectProgressSchema
+from ..src.models.request.request_model import GetProjectSchema, ImageVersion
 
 
 # @pytest.mark.skip

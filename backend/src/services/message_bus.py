@@ -4,8 +4,7 @@ import logging
 from typing import Union, Dict, Callable
 
 from . import handlers
-from ..domain import commands
-from ..domain import events
+from ..models.domain import commands, events
 
 logger = logging.getLogger(__name__)
 
