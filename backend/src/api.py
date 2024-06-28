@@ -44,9 +44,7 @@ async def get_new_image_url(create_project: CreateProjectSchema):
     Generate a new image upload url
     """
     async with UnitOfWork() as uow:
-        repository = ProjectsRepository(uow.session)
-        project_service = ProjectsService(repository)
-        project_dom: ProjectDOM = await project_service.create_project(create_project)
+        project_dom: ProjectDOM = await uow.projects_service.create_project(create_project)
         await uow.commit()
 
     return ProjectCreatedSchema(
@@ -59,9 +57,7 @@ async def get_new_image_url(create_project: CreateProjectSchema):
 @router.get("/projects/{project_id}", response_model=GetProjectSchema)
 async def get_project(project_id: uuid.UUID):
     async with UnitOfWork() as uow:
-        repository = ProjectsRepository(uow.session)
-        projects_service = ProjectsService(repository)
-        project: ProjectDOM = await projects_service.get_project(project_id)
+        project: ProjectDOM = await uow.projects_service.get_project(project_id)
         return GetProjectSchema(
             project_id=project.project_id,
             state=project.state,
@@ -72,9 +68,7 @@ async def get_project(project_id: uuid.UUID):
 @router.get("/projects", response_model=GetProjectsSchema)
 async def get_projects(skip: int = 0, limit: int = 10):
     async with UnitOfWork() as uow:
-        repository = ProjectsRepository(uow.session)
-        project_service = ProjectsService(repository)
-        projects: List[ProjectDOM] = await project_service.list_projects(skip=skip, limit=limit)
+        projects: List[ProjectDOM] = await uow.projects_service.list_projects(skip=skip, limit=limit)
         return GetProjectsSchema(
             projects=[
                 GetProjectSchema(

@@ -25,7 +25,7 @@ from .services.resize_service import resize_with_aspect_ratio
 celery = Celery(__name__,
                 broker=server_settings.CELERY_BROKER_URL,
                 backend=server_settings.CELERY_RESULT_BACKEND,
-                include=["src.main", "src.settings"]  # other modules used by celery to include
+                include=["src.main", "src.settings", "src.repository.uow"]  # other modules used by celery to include
                 )
 
 

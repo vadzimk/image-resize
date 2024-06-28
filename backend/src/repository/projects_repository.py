@@ -6,13 +6,11 @@ from typing import List, Tuple, Any, Dict, Optional
 from fastapi.encoders import jsonable_encoder
 from motor.motor_asyncio import AsyncIOMotorClientSession
 from pymongo import ReturnDocument
-from dotenv import load_dotenv
 
 from ..settings import server_settings
 from ..exceptions import ProjectNotFoundError
 from ..models.domain.object_model import ProjectDOM
 
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

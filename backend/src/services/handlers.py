@@ -24,9 +24,7 @@ async def update_project_in_db(project_id: str, update: dict):
     logger.debug(f"about to update_project_in_db: {type(project_id)} {project_id} | {type(update)} {update}")
     try:
         async with UnitOfWork() as uow:
-            repository = ProjectsRepository(uow.session)
-            projects_service = ProjectsService(repository)
-            updated = await projects_service.update_project(project_id, update)
+            updated = await uow.projects_service.update_project(project_id, update)
             await uow.commit()
             logger.debug(f"update_project_in_db: {updated.dict()}")
     except ProjectNotFoundError as e:
@@ -77,10 +75,8 @@ async def update_failed_project_handler(event: events.CeleryTaskFailed):
     logger.debug(f"handling failed project event {event}")
     try:
         async with UnitOfWork() as uow:
-            repository = ProjectsRepository(uow.session)
-            projects_service = ProjectsService(repository)
-            [project, *_] = await projects_service.list_projects(filters={"celery_task_id": event.message.task_id})
-            updated = await projects_service.update_project(project.project_id, update=event.message.model_dump())
+            [project, *_] = await uow.projects_service.list_projects(filters={"celery_task_id": event.message.task_id})
+            updated = await uow.projects_service.update_project(project.project_id, update=event.message.model_dump())
             await uow.commit()
             logger.debug(f"update failed project in db {updated}")
     except Exception:
