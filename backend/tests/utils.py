@@ -65,7 +65,7 @@ def cleanup_s3_objects(objects: List[str]):
 
 
 async def cleanup_mongodb(project_id: str | None = None):
-    mongo_client = AsyncIOMotorClient(server_settings.MONGO_DETAILS)
+    mongo_client = AsyncIOMotorClient(server_settings.MONGO_URL)
     session = await mongo_client.start_session()
     projects_database = session.client[server_settings.MONGO_DATABASE_NAME]
     projects_collection = projects_database[server_settings.MONGO_COLLECTION_NAME]
