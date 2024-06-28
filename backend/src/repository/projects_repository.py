@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from ..settings import server_settings
 from ..exceptions import ProjectNotFoundError
-from ..domain.model import ProjectDOM
+from ..domain.object_model import ProjectDOM
 
 load_dotenv()
 

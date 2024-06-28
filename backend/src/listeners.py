@@ -9,7 +9,7 @@ from .settings import server_settings
 from .utils import validate_message
 from .services.message_bus import bus
 from .domain.events import CeleryTaskUpdated, OriginalUploaded
-from .schemas import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, ProjectFailureSchema
+from .request_model import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, ProjectFailureSchema
 from .worker import rabbitmq_channel_connection, queue_name
 from .services.minio import s3
 

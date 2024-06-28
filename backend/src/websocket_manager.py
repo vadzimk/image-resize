@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette.websockets import WebSocket
 
 from .utils import validate_message
-from .schemas import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
+from .request_model import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
 from .exceptions import AlreadySubscribed, NotInSubscriptions
 
 logger = logging.getLogger(__name__)

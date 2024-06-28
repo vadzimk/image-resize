@@ -13,7 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from .settings import server_settings
 from .utils import timethis
 from .exceptions import S3ObjectNotFoundError
-from .schemas import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion, ProjectFailureSchema
+from .request_model import TaskState, ProjectProgressSchema, ProgressDetail, ImageVersion, ProjectFailureSchema
 from .services.minio import s3
 from .services.resize_service import resize_with_aspect_ratio
 
@@ -118,12 +118,11 @@ def notify_client(message):
 
 
 @task_postrun.connect
-def task_postrun_handler(task_id, retval, state, **kwargs):
+def task_postrun_handler(task_id, retval:ProjectProgressSchema, state, **kwargs):
     if isinstance(retval, Exception):
         message = ProjectFailureSchema(task_id=task_id, state=TaskState.FAILURE, error=str(retval))
         celery_logger.error(message)
         notify_client(message)
     else:
-        celery_logger.info(json.dumps(retval))
-        retval["state"] = state
+        retval.state= state
         notify_client(retval)

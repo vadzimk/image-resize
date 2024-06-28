@@ -17,7 +17,7 @@ from .utils import (Subscription,
                     is_image
                     )
 
-from ..src.schemas import GetProjectSchema, ImageVersion, ProjectProgressSchema
+from ..src.request_model import GetProjectSchema, ImageVersion, ProjectProgressSchema
 
 
 # @pytest.mark.skip

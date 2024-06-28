@@ -1,8 +1,16 @@
+"""
+Pydantic schemas or request model
+"""
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Annotated, Optional, List
 
-from pydantic import BaseModel, UUID4, Strict
+from bson import ObjectId
+from pydantic import BaseModel, UUID4, Strict, PlainSerializer, ConfigDict
+
+UUID_str = Annotated[Annotated[UUID4, Strict(False)], PlainSerializer(lambda x: str(x), return_type=str)]
+ObjectId = Annotated[ObjectId, PlainSerializer(lambda x: str(x), return_type=str)]
 
 
 class CreateProjectSchema(BaseModel):
@@ -10,7 +18,7 @@ class CreateProjectSchema(BaseModel):
 
 
 class ProjectCreatedSchema(CreateProjectSchema):
-    project_id: Annotated[UUID4, Strict(False)]
+    project_id: UUID_str
     upload_link: str
 
 
@@ -33,7 +41,7 @@ class ImageVersion(str, Enum):
 
 
 class GetProjectSchema(BaseModel):
-    project_id: Annotated[UUID4, Strict(False)]
+    project_id: UUID_str
     state: TaskState
     versions: Dict[ImageVersion, str]
 
@@ -53,10 +61,11 @@ class ProjectProgressSchema(GetProjectSchema):
 
 
 class ProjectFailureSchema(BaseModel):
-    task_id: str
+    task_id: ObjectId
     state: TaskState
     error: str
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class SubscribeAction(str, Enum):
     SUBSCRIBE = "SUBSCRIBE"
@@ -65,7 +74,7 @@ class SubscribeAction(str, Enum):
 
 class SubscribeSchema(BaseModel):
     action: SubscribeAction
-    project_id: Annotated[UUID4, Strict(False)]
+    project_id: UUID_str
 
 
 class OnSubscribeSchema(SubscribeSchema):

@@ -9,7 +9,7 @@ from starlette.websockets import WebSocket
 from ..repository.projects_repository import ProjectsRepository
 from ..repository.uow import UnitOfWork
 from .projects_service import ProjectsService
-from ..schemas import OnSubscribeSchema, SubscribeAction, ImageVersion, TaskState
+from ..request_model import OnSubscribeSchema, SubscribeAction, ImageVersion, TaskState
 from ..utils import validate_message
 from ..exceptions import ClientError, ProjectNotFoundError
 from ..domain import events
