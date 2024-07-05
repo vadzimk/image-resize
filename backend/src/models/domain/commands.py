@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 
 from starlette.websockets import WebSocket
@@ -10,10 +11,10 @@ class Command:
 @dataclass
 class Subscribe(Command):
     websocket: WebSocket
-    project_id: str
+    object_prefix: uuid.UUID
 
 
 @dataclass
 class UnSubscribe(Command):
     websocket: WebSocket
-    project_id: str
+    object_prefix: uuid.UUID

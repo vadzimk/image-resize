@@ -27,25 +27,25 @@ class MessageBus:
         self._loop = loop
 
     async def _handle_event(self, event: events.Event):
-        logger.info(f"Handling event {event}")
+        logger.debug(f"Handling event {event}")
         for handler in self.event_handlers[type(event)]:
             try:
                 await handler(event)
             except Exception:
-                logger.exception(f"Exception handling event {event}")
+                logger.error(f"Exception handling event {event}")
                 raise
 
     async def _handle_command(self, command: commands.Command):
-        logger.info(f"Handling command {command}")
+        logger.debug(f"Handling command {command}")
         try:
             handler = self.command_handlers[type(command)]
             await handler(command)
         except Exception:
-            logger.exception(f"Exception handling command {command}")
+            logger.error(f"Exception handling command {command}")
             raise
 
     def handle(self, message: Message):
-        logger.info(f"bus:handle:message: {message}")
+        logger.debug(f"bus:handle:message: {message}")
         self.queue.append(message)
         while self.queue:
             cur_message = self.queue.pop(0)

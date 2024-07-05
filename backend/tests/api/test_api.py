@@ -8,78 +8,60 @@ from typing import Collection
 import httpx
 import pytest
 from httpx import Response
+import validators
 from starlette.testclient import TestClient
 
-from .utils import (Subscription,
-                    upload_originals_s3,
-                    cleanup_project,
-                    is_image
-                    )
+from ..utils import (Subscription,
+                     upload_originals_s3,
+                     cleanup_project,
+                     is_image
+                     )
 
-from ..src.models.request.request_model import GetProjectSchema, ImageVersion
+from ...src.models.request.request_model import GetProjectSchema, ImageVersion, ProjectCreatedSchema
+
+
+# @pytest.mark.skip
+def test_get_new_image_url_returns_upload_link(test_client):
+    """ endpoint post('/images') """
+    image_file_path = "./tests/photo.jpeg"
+    filename = os.path.basename(image_file_path)
+    res = test_client.post("/images", json={"filename": filename})
+    project_created = ProjectCreatedSchema.model_validate_json(res.text)
+    assert validators.url(project_created.upload_link, simple_host=True, may_have_port=True)
 
 
 # @pytest.mark.skip
 @pytest.mark.timeout(10)  # times out when versions are not removed
-class TestPostNewFile:
+class TestUploadOriginal:
     async def test_all_versions_are_created(self, missed_versions: Collection):
         assert len(missed_versions) == 0
 
 
 # @pytest.mark.skip
-@pytest.mark.timeout(10)
-class TestWebsocket:
-    """ endpoint websocket('/ws') """
-
-    async def test_can_unsubscribe(self, expected_project_id):
-        async with Subscription(expected_project_id) as websocket:
-            await websocket.send(json.dumps({"action": "UNSUBSCRIBE", "project_id": expected_project_id}))
-            max_retries = 3
-            retry_delay = 1
-            retry_count = 0
-            while retry_count < max_retries:
-                try:
-                    response = await websocket.recv()
-                    # print("response2", response)
-                    msg = json.loads(response)
-                    assert msg.get("status") == "OK"
-                    assert msg.get("action") == "UNSUBSCRIBE"
-                    assert msg.get("project_id") == expected_project_id
-                except AssertionError as e:
-                    retry_count += 1
-                    print("retry_count", retry_count)
-                    await asyncio.sleep(retry_delay)
-                else:
-                    print(f"\nNumber of retries {retry_count}")
-                    break  # no exceptions in try, assertion passed
-            with pytest.raises(asyncio.TimeoutError):
-                await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe
-
-
-# @pytest.mark.skip
-class TestGetProjectsIdReturnsSingleProject:
-    """ endpoint get('/projects/<project_id>') """
+class TestGetProject:
+    """ endpoint get('/projects/<object_prefix>') """
 
     @pytest.fixture(scope="session")
-    async def res(self, expected_project_id: str, test_client: TestClient, missed_versions) -> Response:
+    async def res(self, expected_object_prefix: str, test_client: TestClient, missed_versions) -> Response:
         # await asyncio.sleep(3)  # let the db update state -- uses missed_versions fixture instead
-        res = test_client.get(f"/projects/{expected_project_id}")
+        res = test_client.get(f"/projects/{expected_object_prefix}")
         return res
 
     # @pytest.mark.skip
-    def test_project_id_in_response(self, res: Response, expected_project_id: str):
+    def test_returns_single_project_and_object_prefix_in_response(self, res: Response, expected_object_prefix: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
-        assert str(project_response.project_id) == expected_project_id
+        assert str(project_response.object_prefix) == expected_object_prefix
 
     # @pytest.mark.skip
-    def test_project_id_in_versions_original(self, res: Response, expected_project_id: str):
+    def test_object_prefix_in_versions_original(self, res: Response, expected_object_prefix: str):
         project_response = GetProjectSchema.model_validate_json(res.text)
         print("project_response")
         pprint(project_response)
         response_versions_original = project_response.versions.get(ImageVersion.original)
         assert response_versions_original is not None
-        assert expected_project_id in response_versions_original
+        assert expected_object_prefix in response_versions_original
 
+    # @pytest.mark.skip
     async def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self,
                                                                                                        res: Response):
         async def url_saves_to_image(working_dir, url) -> bool:
@@ -141,3 +123,33 @@ class TestGetProjectsReturnsListOfProjects:
         res = test_client.get(f"/projects", params={"skip": the_skip}).json()
         projects = res.get("projects")
         assert len(projects) == expected_left_after_skip
+
+
+# @pytest.mark.skip
+@pytest.mark.timeout(10)
+class TestWebsocket:
+    """ endpoint websocket('/ws') """
+
+    async def test_can_unsubscribe(self, expected_object_prefix):
+        async with Subscription(expected_object_prefix) as websocket:
+            await websocket.send(json.dumps({"action": "UNSUBSCRIBE", "object_prefix": expected_object_prefix}))
+            max_retries = 3
+            retry_delay = 1
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    response = await websocket.recv()
+                    print("response2", response)
+                    msg = json.loads(response)
+                    assert msg.get("status") == "OK"
+                    assert msg.get("action") == "UNSUBSCRIBE"
+                    assert msg.get("object_prefix") == expected_object_prefix
+                except AssertionError as e:
+                    retry_count += 1
+                    print("retry_count", retry_count)
+                    await asyncio.sleep(retry_delay)
+                else:
+                    print(f"\nNumber of retries {retry_count}")
+                    break  # no exceptions in try, assertion passed
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(websocket.recv(), timeout=2)  # no more messages from websocket after unsubscribe

@@ -8,23 +8,20 @@ from fastapi import APIRouter
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from .services.message_bus import bus
-from .models.domain.object_model import ProjectDOM
-from .services.handlers import command_handlers
-from .models.domain import commands
-from .services.minio import get_presigned_url_get
-from .repository.uow import UnitOfWork
-from .repository.projects_repository import ProjectsRepository
-from .services.projects_service import ProjectsService
-from .websocket_manager import ws_manager
-from .models.request.request_model import (ProjectCreatedSchema,
-                                          CreateProjectSchema,
-                                          GetProjectSchema,
-                                          SubscribeSchema,
-                                          GetProjectsSchema,
-                                          )
-
-from .utils import validate_message
+from ..services.message_bus import bus
+from ..models.domain.object_model import ProjectDOM
+from ..services.handlers import command_handlers
+from ..models.domain import commands
+from ..services.minio import get_presigned_url_get
+from ..repository.projects_uow import ProjectsUnitOfWork
+from ..services.websocket_manager import ws_manager
+from ..utils import validate_message
+from ..models.request.request_model import (ProjectCreatedSchema,
+                                            CreateProjectSchema,
+                                            GetProjectSchema,
+                                            SubscribeSchema,
+                                            GetProjectsSchema,
+                                            )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,23 +40,22 @@ async def get_new_image_url(create_project: CreateProjectSchema):
     """
     Generate a new image upload url
     """
-    async with UnitOfWork() as uow:
-        project_dom: ProjectDOM = await uow.projects_service.create_project(create_project)
+    async with ProjectsUnitOfWork() as uow:
+        project_dom: ProjectDOM = await uow.service.create_project(create_project)
         await uow.commit()
-
     return ProjectCreatedSchema(
         filename=create_project.filename,
-        project_id=project_dom.project_id,
+        object_prefix=project_dom.object_prefix,
         upload_link=project_dom.pre_signed_url
     )
 
 
-@router.get("/projects/{project_id}", response_model=GetProjectSchema)
-async def get_project(project_id: uuid.UUID):
-    async with UnitOfWork() as uow:
-        project: ProjectDOM = await uow.projects_service.get_project(project_id)
+@router.get("/projects/{object_prefix}", response_model=GetProjectSchema)
+async def get_project(object_prefix: uuid.UUID):
+    async with ProjectsUnitOfWork() as uow:
+        project: ProjectDOM = await uow.service.get_by_object_prefix(object_prefix)
         return GetProjectSchema(
-            project_id=project.project_id,
+            object_prefix=project.object_prefix,
             state=project.state,
             versions=s3_object_names_to_urls(project.versions)
         )
@@ -67,12 +63,12 @@ async def get_project(project_id: uuid.UUID):
 
 @router.get("/projects", response_model=GetProjectsSchema)
 async def get_projects(skip: int = 0, limit: int = 10):
-    async with UnitOfWork() as uow:
-        projects: List[ProjectDOM] = await uow.projects_service.list_projects(skip=skip, limit=limit)
+    async with ProjectsUnitOfWork() as uow:
+        projects: List[ProjectDOM] = await uow.service.list_projects(skip=skip, limit=limit)
         return GetProjectsSchema(
             projects=[
                 GetProjectSchema(
-                    project_id=proj.project_id,
+                    object_prefix=proj.object_prefix,
                     state=proj.state,
                     versions=s3_object_names_to_urls(proj.versions)
                 ) for proj in projects])
@@ -102,5 +98,8 @@ def make_command(message: dict, websocket: WebSocket) -> commands.Command:
     message_model = validate_message(message, [SubscribeSchema])
     for CommandType in command_handlers.keys():
         if CommandType.__name__.upper() == message_model.action:
-            return CommandType(websocket, str(message_model.project_id))
+            object_prefix_uuid = message_model.object_prefix if isinstance(message_model.object_prefix, uuid.UUID) \
+                else uuid.UUID(message_model.object_prefix)
+            command = CommandType(websocket, object_prefix_uuid)
+            return command
     raise Exception(f"Unknown handler action {message_model.action}")

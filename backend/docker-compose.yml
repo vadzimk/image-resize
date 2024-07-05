@@ -1,12 +1,85 @@
-version: "3.5"
+x-mongo-environment: &mongo-environment
+  - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+  - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+  - MONGO_REPLICA_SET_NAME=${MONGO_REPLICA_SET_NAME}
+  - MONGO_DATABASE_NAME=${MONGO_DATABASE_NAME}
+  - MONGO_APP_USERNAME=${MONGO_APP_USERNAME}
+  - MONGO_APP_PASSWORD=${MONGO_APP_PASSWORD}
 
-volumes:
-  redis_data:
-  rabbitmq_data:
-  mongo_data:
-  minio_data:
+x-mongo-replica-common: &mongo-replica-common
+  image: mongo
+  restart: unless-stopped
+  environment: *mongo-environment
 
 services:
+  mongo-replica-setup:
+    container_name: image-resize-mongo-setup
+    image: mongo
+    restart: on-failure
+    volumes:
+      - ./mongo/mongo_setup.sh:/scripts/mongo_setup.sh
+    entrypoint: [ "bash", "/scripts/mongo_setup.sh" ]
+    environment: *mongo-environment
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+
+  mongo1:
+    <<: *mongo-replica-common
+    container_name: image-resize-mongo1
+    ports:
+      - 30001:30001
+    command: [ "-f", "/etc/mongod.conf", "--port", "30001", "--keyFile", "/etc/mongo-keyfile", "--replSet", "${MONGO_REPLICA_SET_NAME}", "--bind_ip_all" ]
+    volumes:
+      - ./mongo/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+      - ./mongo/mongod.conf:/etc/mongod.conf
+      - ./mongo/mongo-keyfile:/etc/mongo-keyfile
+      - mongo_data1:/data/db
+      - mongo_log1:/var/log/mongodb
+    healthcheck:
+      test: echo 'rs.status().ok' | mongosh admin --port 30001 -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --quiet | grep 1
+      interval: 30s
+      start_period: 60s
+
+  mongo2:
+    <<: *mongo-replica-common
+    container_name: image-resize-mongo2
+    ports:
+      - 30002:30002
+    command: [ "-f", "/etc/mongod.conf", "--port", "30002", "--keyFile", "/etc/mongo-keyfile", "--replSet", "${MONGO_REPLICA_SET_NAME}", "--bind_ip_all" ]
+    volumes:
+      - ./mongo/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+      - ./mongo/mongod.conf:/etc/mongod.conf
+      - ./mongo/mongo-keyfile:/etc/mongo-keyfile
+      - mongo_data2:/data/db
+      - mongo_log2:/var/log/mongodb
+    depends_on:
+      - mongo1
+    healthcheck:
+      test: echo 'rs.status().ok' | mongosh admin --port 30002 -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --quiet | grep 1
+      interval: 30s
+      start_period: 60s
+
+  mongo3:
+    <<: *mongo-replica-common
+    container_name: image-resize-mongo3
+    ports:
+      - 30003:30003
+    command: [ "-f", "/etc/mongod.conf", "--port", "30003", "--keyFile", "/etc/mongo-keyfile", "--replSet", "${MONGO_REPLICA_SET_NAME}", "--bind_ip_all" ]
+    volumes:
+      - ./mongo/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+      - ./mongo/mongod.conf:/etc/mongod.conf
+      - ./mongo/mongo-keyfile:/etc/mongo-keyfile
+      - mongo_data3:/data/db
+      - mongo_log3:/var/log/mongodb
+    depends_on:
+      - mongo1
+    healthcheck:
+      test: echo 'rs.status().ok' | mongosh admin --port 30003 -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --quiet | grep 1
+      interval: 30s
+      start_period: 60s
+
   minio:
     image: minio/minio
     container_name: image-resize-minio # boto does not support underscores in host names
@@ -60,46 +133,21 @@ services:
     volumes:
       - redis_data:/data
 
-  mongo:
-    image: mongo
-    container_name: image-resize-mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - ./mongo/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
-      - mongo_data:/data/db
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME
-      - MONGO_INITDB_ROOT_PASSWORD=$MONGO_INITDB_ROOT_PASSWORD
-
-  mongo-express:
-    image: mongo-express
-    container_name: image-resize-mongo-express
-    restart: unless-stopped
-    depends_on:
-      - mongo
-    ports:
-      - "8081:8081" # terminal
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=$MONGO_INITDB_ROOT_USERNAME
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=$MONGO_INITDB_ROOT_PASSWORD
-      - ME_CONFIG_MONGODB_URL=$MONGO_URL
-
-        #  postgres:
-        #    image: postgres
-        #    restart: unless-stopped
-        #    container_name: postgres_dev
-        #    ports:
-        #      - "5432:5432"
-        #    env_file:
-        #      - .env.dev.postgres
-        #    volumes:
-        #      - ./postgres-init-db.sh:/docker-entrypoint-initdb.d/postgres-init-db.sh
-      #      - ./postgres_data_dev/:/var/lib/postgresql/data
-
-
-      # TODO containerise celery worker and main app
+#      #
+#      #        #  postgres:
+#      #        #    image: postgres
+#      #        #    restart: unless-stopped
+#      #        #    container_name: postgres_dev
+#      #        #    ports:
+#      #        #      - "5432:5432"
+#      #        #    env_file:
+#      #        #      - .env.dev.postgres
+#      #        #    volumes:
+#      #      #      - ./postgres-init-db.sh:/docker-entrypoint-initdb.d/postgres-init-db.sh
+#      #      #      - ./postgres_data_dev/:/var/lib/postgresql/data
+#
+#
+#    # TODO containerise celery worker and main app
 
 #      web:
 #        build: ./project
@@ -128,7 +176,17 @@ services:
 
 
 
+volumes:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
 
+  mongo_data1:
+  mongo_log1:
 
+  mongo_data2:
+  mongo_log2:
 
-
+  mongo_data3:
+  mongo_log3:

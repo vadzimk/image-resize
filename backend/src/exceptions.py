@@ -14,8 +14,8 @@ class NotInSubscriptions(ClientError):
 
 
 class ProjectNotFoundError(ClientError):
-    def __init__(self, project_id):
-        super(ProjectNotFoundError, self).__init__(f"Project with id {project_id} not found")
+    def __init__(self, object_prefix):
+        super(ProjectNotFoundError, self).__init__(f"Project with object_prefix {object_prefix} not found")
 
 
 class S3ObjectNotFoundError(ClientError):

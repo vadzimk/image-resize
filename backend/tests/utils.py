@@ -11,6 +11,7 @@ from websockets import connect
 import httpx
 from PIL import Image
 
+from ..src.repository.projects_uow import create_db_client
 from ..src.settings import server_settings
 from .exceptions import FileUploadFailed
 from ..src.main import app
@@ -21,14 +22,17 @@ load_dotenv()
 client = TestClient(app)
 
 
-def get_images_s3_upload_link_and_project_id(image_file_path) -> Tuple[str, str]:
+def get_images_s3_upload_link_and_object_prefix(image_file_path) -> Tuple[str, str]:
     assert os.path.exists(image_file_path)
     filename = os.path.basename(image_file_path)
     res = client.post("/images", json={"filename": filename})
+    print("res======>")
+    print(res.json())
+
     project_response = ProjectCreatedSchema.model_validate_json(res.text)
     assert project_response.upload_link.startswith('http')
     assert project_response.filename == filename
-    return project_response.upload_link, str(project_response.project_id)
+    return project_response.upload_link, str(project_response.object_prefix)
 
 
 async def trigger_original_file_upload(image_file_path, upload_link):
@@ -44,13 +48,13 @@ async def upload_originals_s3(number: int) -> List[str]:
     image_file_path = "./tests/photo.jpeg"
 
     async def upload_one(file_path) -> str:
-        upload_link, project_id = get_images_s3_upload_link_and_project_id(file_path)
+        upload_link, object_prefix = get_images_s3_upload_link_and_object_prefix(file_path)
         await trigger_original_file_upload(file_path, upload_link)
-        return project_id
+        return object_prefix
 
     tasks = [upload_one(image_file_path) for _ in range(number)]
-    project_ids = await asyncio.gather(*tasks)
-    return list(project_ids)
+    object_prefixs = await asyncio.gather(*tasks)
+    return list(object_prefixs)
 
 
 def cleanup_s3_objects(objects: List[str]):
@@ -64,27 +68,27 @@ def cleanup_s3_objects(objects: List[str]):
     print(f"cleanup_s3_objects: Done. Deleted {len(objects)} objects.")
 
 
-async def cleanup_mongodb(project_id: str | None = None):
-    mongo_client = AsyncIOMotorClient(server_settings.MONGO_URL)
+async def cleanup_mongodb(object_prefix: str | None = None):
+    mongo_client = create_db_client()
     session = await mongo_client.start_session()
     projects_database = session.client[server_settings.MONGO_DATABASE_NAME]
-    projects_collection = projects_database[server_settings.MONGO_COLLECTION_NAME]
-    print("cleanup_mongodb:project_id:", project_id)
-    if project_id is not None:
-        await projects_collection.delete_one({"project_id": project_id})
+    projects_collection = projects_database["projects"]
+    print("cleanup_mongodb:object_prefix:", object_prefix)
+    if object_prefix is not None:
+        await projects_collection.delete_one({"object_prefix": object_prefix})
     else:
         await projects_collection.delete_many({})  # delete all
         assert await projects_collection.count_documents({}) == 0  # all documents deleted
     await session.end_session()
 
 
-async def cleanup_project(project_id: str | None = None):
+async def cleanup_project(object_prefix: str | None = None):
     all_objects_to_delete = list(
         s3.list_objects(bucket_name=server_settings.MINIO_BUCKET_NAME,
-                        prefix=None if project_id is None else str(project_id),
+                        prefix=None if object_prefix is None else str(object_prefix),
                         recursive=True))
     cleanup_s3_objects([o.object_name for o in all_objects_to_delete])
-    await cleanup_mongodb(project_id)
+    await cleanup_mongodb(object_prefix)
 
 
 def s3_upload_link_put_file(image_file_path, upload_link):
@@ -94,18 +98,18 @@ def s3_upload_link_put_file(image_file_path, upload_link):
 
 
 class Subscription:
-    """ Subscribes to websocket to listen to events of a project_id
+    """ Subscribes to websocket to listen to events of a object_prefix
     gets the subscription confirmation
     and returns websocket to receive subsequent events
     """
 
-    def __init__(self, project_id: str):
-        self.project_id = project_id
+    def __init__(self, object_prefix: str):
+        self.object_prefix = object_prefix
         self.websocket = None
 
     async def __aenter__(self):
         self.websocket = await connect("ws://localhost:8000/ws")
-        await self.websocket.send(json.dumps({"action": "SUBSCRIBE", "project_id": self.project_id}))
+        await self.websocket.send(json.dumps({"action": "SUBSCRIBE", "object_prefix": self.object_prefix}))
         res_confirmation = await self.websocket.recv()
         assert json.loads(res_confirmation).get("status") == "OK"
         return self.websocket

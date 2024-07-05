@@ -81,27 +81,27 @@ operations:
 components:
   messages:
     subscribe:
-      summary: subscribe to a particular project_id
+      summary: subscribe to a particular object_prefix
       payload:
         $ref: '#/components/schemas/RequestSubscribeSchema'
       examples:
         - name: subscribe example
           payload:
             action: SUBSCRIBE
-            project_id: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
+            object_prefix: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
     onSubscribe:
       summary: server response to subscribe command
       payload:
         $ref: '#/components/schemas/ResponseOnSubscribeSchema'
     unsubscribe:
-      summary: unsubscribe from a particular project_id
+      summary: unsubscribe from a particular object_prefix
       payload:
         $ref: '#/components/schemas/RequestSubscribeSchema'
       examples:
         - name: unsubscribe example
           payload:
             action: UNSUBSCRIBE
-            project_id: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
+            object_prefix: 4dce98a2-ee61-43f2-a0f4-1f1f947d5582
     onUnsubscribe:
       summary: server response to unsubscribe command
       payload:
@@ -116,13 +116,13 @@ components:
       type: object
       required:
         - action
-        - project_id
+        - object_prefix
       properties:
         action:
           enum:
             - SUBSCRIBE
             - UNSUBSCRIBE
-        project_id:
+        object_prefix:
           type: string
           description: project uuid
     ResponseOnSubscribeSchema:
@@ -151,7 +151,7 @@ components:
     TaskProgress:
       type: object
       required:
-        - project_id
+        - object_prefix
         - state
         - versions
       properties:
@@ -165,7 +165,7 @@ components:
               type: integer
             total:
               type: integer
-        project_id:
+        object_prefix:
           type: string
         versions:
           type: object
@@ -184,8 +184,8 @@ components:
               type: string
         state:
           enum:
-            - INITIATE
-            - GOTORIGINAL
+            - EXPECTING_ORIGINAL
+            - GOT_ORIGINAL
             - STARTED
             - PROGRESS
             - SUCCESS

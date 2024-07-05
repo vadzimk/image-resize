@@ -6,11 +6,12 @@ from typing import Callable, List
 
 from fastapi import FastAPI
 
+from .api.api import router
 from .settings import server_settings
-from .api import router
+
 from .services.minio import s3
 from .services.message_bus import bus
-from .listeners import (
+from .services.background_listeners import (
     listen_create_s3_events_and_update_db_and_start_celery_tasks,
     listen_celery_task_notifications_queue)
 

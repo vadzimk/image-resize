@@ -18,11 +18,13 @@ class ServerSettings(BaseSettings):
     MINIO_HOSTNAME: str
     MINIO_BUCKET_NAME: str
 
-    MONGO_INITDB_ROOT_USERNAME: str
-    MONGO_INITDB_ROOT_PASSWORD: str
+    MONGO_APP_USERNAME: str
+    MONGO_APP_PASSWORD: str
     MONGO_URL: str
     MONGO_DATABASE_NAME: str
-    MONGO_COLLECTION_NAME: str
+    MONGO_REPLICA_SET_NAME: str
+
+    task_notifications_queue = "task_notifications"  # also called routing_key or channel or event_type or event_name or topic or queue
 
 
 server_settings = ServerSettings()

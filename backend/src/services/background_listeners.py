@@ -1,17 +1,16 @@
 import json
 import logging
-
-from minio import S3Error
 import traceback
+from minio import S3Error
 from asyncio import AbstractEventLoop
 
-from .settings import server_settings
-from .utils import validate_message
-from .services.message_bus import bus
-from .models.domain.events import CeleryTaskUpdated, OriginalUploaded
-from .models.request.request_model import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, ProjectFailureSchema
-from .worker import rabbitmq_channel_connection, queue_name
-from .services.minio import s3
+from ..services.message_broker import rabbitmq_channel_connection
+from ..settings import server_settings
+from ..utils import validate_message
+from ..services.message_bus import bus
+from ..models.domain.events import CeleryTaskUpdated, OriginalUploaded
+from ..models.request.request_model import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, ProjectFailureSchema
+from ..services.minio import s3
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +25,8 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
                 original_object_key = s3_object_key
                 original_uploaded_event = OriginalUploaded(
                     message=GetProjectSchema(
-                        project_id=original_object_key.split("/")[0],
-                        state=TaskState.GOTORIGINAL,
+                        object_prefix=original_object_key.split("/")[0],
+                        state=TaskState.GOT_ORIGINAL,
                         versions={ImageVersion.original: original_object_key}
                     ))
                 bus.handle(original_uploaded_event)
@@ -66,6 +65,6 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         logger.debug(
             f"listen_celery_task_notifications_queue_to_publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
-        rabbitmq_channel.basic_consume(queue=queue_name, on_message_callback=celery_event_callback, auto_ack=True)
+        rabbitmq_channel.basic_consume(queue=server_settings.task_notifications_queue, on_message_callback=celery_event_callback, auto_ack=True)
         rabbitmq_channel.start_consuming()  # starts loop
 

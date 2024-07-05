@@ -1,82 +1,50 @@
 import logging
-import uuid
-from abc import ABC, abstractmethod
+import traceback
+
 from typing import List, Tuple, Any, Dict, Optional
 
-from fastapi.encoders import jsonable_encoder
-from motor.motor_asyncio import AsyncIOMotorClientSession
-from pymongo import ReturnDocument
+from odmantic.session import AIOSession
 
-from ..settings import server_settings
+from .abstract_repository import AbstractRepository
+from ..models.data.data_model import Project
 from ..exceptions import ProjectNotFoundError
-from ..models.domain.object_model import ProjectDOM
-
 
 logger = logging.getLogger(__name__)
 
 
-class ProjectsRepositoryInterface(ABC):
-    @abstractmethod
-    async def add(self, project: ProjectDOM) -> dict:
-        raise NotImplementedError()
-
-    @abstractmethod
-    async def get(self, project_id) -> dict:
-        raise NotImplementedError()
-
-    @abstractmethod
-    async def update(self, project_id: str, update: dict) -> dict:
-        raise NotImplementedError()
-
-    @abstractmethod
-    async def list(self,
-                   skip: Optional[int] = 0,
-                   limit: Optional[int] = None,
-                   sort: Optional[List[Tuple[str, Any]]] = None,
-                   filters: Optional[Dict[str, Any]] = None) -> List[dict]:
-        raise NotImplementedError()
-
-
-class ProjectsRepository(ProjectsRepositoryInterface):
-    def __init__(self, session: AsyncIOMotorClientSession):
+class ProjectsRepository(AbstractRepository):
+    def __init__(self, session: AIOSession):
         self.session = session
-        self.projects_database = self.session.client[server_settings.MONGO_DATABASE_NAME]
-        self.projects_collection = self.projects_database[server_settings.MONGO_COLLECTION_NAME]  # creates if not exist
 
     async def list(self,
                    skip: Optional[int] = 0,
                    limit: Optional[int] = None,
                    sort: Optional[List[Tuple[str, Any]]] = None,
-                   filters: Optional[Dict[str, Any]] = None) -> List[dict]:
+                   filters: Optional[Dict[str, Any]] = None) -> List[Project]:
         limit = limit if limit is not None else 10
         filters = filters if filters is not None else {}
-        cursor = self.projects_collection.find(filters)
-        if sort:
-            cursor = cursor.sort(sort)
-        documents = await cursor.skip(skip).limit(limit).to_list(limit)
-        return [(doc.pop("_id") and doc) for doc in documents]
+        documents = await self.session.find(Project, filters, sort=sort, skip=skip, limit=limit)
+        return documents
 
-    async def add(self, project: ProjectDOM) -> dict:
-        insert_result = await self.projects_collection.insert_one(project.dict())
-        document = await self.projects_collection.find_one({"_id": insert_result.inserted_id})
-        return document
+    async def add(self, project: Project) -> Project:
+        project = await self.session.save(project)
+        return project
 
-    async def update(self, project_id: str, update: dict) -> dict:
-        document: dict = await self.projects_collection.find_one_and_update(
-            filter={"project_id": str(project_id)},
-            update={"$set": jsonable_encoder(update)},
-            return_document=ReturnDocument.AFTER
-        )
-        logger.debug(f"ProjectsRepository:update: {document}")
-        if document is None:
-            raise ProjectNotFoundError(project_id)
-        document.pop("_id")
-        return document
+    async def update(self, filters:Dict[str, Any], update: Dict) -> Project:
+        project: Project | None = await self.session.find_one(Project, filters)
+        if project is None:
+            logger.error(f"Unexpected error:\n{traceback.format_exc()}")
+            raise ProjectNotFoundError(object_prefix=filters.get("object_prefix"))
+        project.model_update(patch_object=update)
+        await self.session.save(project)
+        logger.debug(f"ProjectsRepository:update: {project}")
+        return project
 
-    async def get(self, project_id: uuid.UUID) -> dict:
-        document: dict | None = await self.projects_collection.find_one({"project_id": str(project_id)})
-        if document is None:
-            raise ProjectNotFoundError(project_id)
-        document.pop("_id")
-        logger.debug(f"ProjectsRepository.get:document: {document}")
-        return document
+    async def get(self, filters: Dict[str, Any]) -> Project:
+        logger.debug(f"ProjectsRepository:get {filters}")
+
+        project: Project | None = await self.session.find_one(Project, filters)
+        if project is None:
+            raise ProjectNotFoundError()
+        logger.debug(f"ProjectsRepository.get:document: {project}")
+        return project

@@ -18,13 +18,13 @@ class CreateProjectSchema(BaseModel):
 
 
 class ProjectCreatedSchema(CreateProjectSchema):
-    project_id: UUID_str
+    object_prefix: UUID_str
     upload_link: str
 
 
 class TaskState(str, Enum):
-    INITIATE = "INITIATE"
-    GOTORIGINAL = "GOTORIGINAL"
+    EXPECTING_ORIGINAL = "EXPECTING_ORIGINAL"  # original upload url created
+    GOT_ORIGINAL = "GOT_ORIGINAL"
     STARTED = "STARTED"
     PROGRESS = "PROGRESS"
     SUCCESS = "SUCCESS"
@@ -41,7 +41,7 @@ class ImageVersion(str, Enum):
 
 
 class GetProjectSchema(BaseModel):
-    project_id: UUID_str
+    object_prefix: UUID_str
     state: TaskState
     versions: Dict[ImageVersion, str]
 
@@ -74,7 +74,7 @@ class SubscribeAction(str, Enum):
 
 class SubscribeSchema(BaseModel):
     action: SubscribeAction
-    project_id: UUID_str
+    object_prefix: UUID_str
 
 
 class OnSubscribeSchema(SubscribeSchema):

@@ -1,11 +1,13 @@
 import json
 import re
-from typing import Generator
+import uuid
+from typing import Generator, List
 
 import pytest
 from starlette.testclient import TestClient
 
 from .utils import cleanup_project, upload_originals_s3, Subscription
+from ..src.models.data.data_model import Project
 from ..src.main import app
 
 
@@ -27,14 +29,14 @@ async def setup_teardown():
 
 
 @pytest.fixture(scope="session")
-async def expected_project_id() -> str:
-    [project_id] = await upload_originals_s3(1)
-    yield project_id
-    await cleanup_project(project_id)
+async def expected_object_prefix() -> str:
+    [object_prefix] = await upload_originals_s3(1)
+    yield object_prefix
+    await cleanup_project(object_prefix)
 
 
 @pytest.fixture(scope="session")
-async def missed_versions(expected_project_id):
+async def missed_versions(expected_object_prefix):
     class VersionIterator:
         def __init__(self):
             self._versions = ["big_thumb", "thumb", "big_1920",
@@ -82,7 +84,7 @@ async def missed_versions(expected_project_id):
                 versions.remove(s3_key)
 
     versions = VersionIterator()
-    async with Subscription(expected_project_id) as websocket:
+    async with Subscription(expected_object_prefix) as websocket:
         try:
             celery_versions = celery_event_iterator(versions)
             next(celery_versions)
@@ -93,3 +95,21 @@ async def missed_versions(expected_project_id):
                     celery_versions.send(message)
         except StopIteration:  # All versions were created
             return versions
+
+
+@pytest.fixture()
+async def inserted_projects(request, mongo_session):
+    try:
+        number_of_projects = request.param
+    except AttributeError:
+        number_of_projects = 1
+    projects: List[Project] = []
+    await cleanup_project()
+    for _ in range(number_of_projects):
+        object_prefix = uuid.uuid4()
+        project = Project(object_prefix=object_prefix, pre_signed_url="http://test-url")
+        await mongo_session.save(project)
+        projects.append(project)
+    yield projects
+    for p in projects:
+        await mongo_session.remove(Project, Project.id == p.id)
