@@ -47,7 +47,7 @@ Processed image sizes:
 make docker.up && \
 make celery.start && \
 make backend.start && \
-make backend test
+make backend.test
 ```
 
 <details>
