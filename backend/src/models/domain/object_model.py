@@ -11,7 +11,7 @@ from ..request.request_model import TaskState, ProgressDetail, ImageVersion
 logger = logging.getLogger(__name__)
 
 
-class ProjectDOM:
+class ProjectDOM: # domain object model
     def __init__(self, *,
                  id: uuid.UUID,
                  pre_signed_url: str,

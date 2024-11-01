@@ -3,9 +3,6 @@
 The app takes an image upload,
 does resizing in four particular formats  
 outputs processed images for download.
-Basic UI for the app.
-
-![img.png](img.png)
 
 Processed image sizes:
 - Original
@@ -14,13 +11,49 @@ Processed image sizes:
 - big_1920, 1920x1080, to_fit
 - d2500: 2500x2500, to_fit
 
-## Prerequisites
-- docker, docker-compose, node
-- https://www.asyncapi.com/docs/tools/cli/installation
+## Work items
 
+- [x] Backend
+  - [x] Domain modelling
+  - [x] REST api implementation
+  - [x] WebSocket
+    - schema modelling
+      - models/request/ws_schema/asyncapi.yaml
+    - Websocket Manager implementation
+  - [x] Repository pattern
+  - [x] Unit of work pattern
+  - [x] Event Bus pattern
+  - [x] Celery background tasks implementation
+  - [x] Pytest unit and integration tests
+- [ ] Frontend
+  - [x] Figma prototype
+  - [ ] ReactJs implementation
+- [ ] Demo
+  - [ ] Dockerfile and docker-compose for demo
+  - [ ] Gitlab pipeline and deployment
 
 <details>
-<summary>Requirements document</summary>
+<summary>Basic Figma prototype for the app.</summary>
+<img src="img.png" alt="UI Image">
+</details>
+
+
+## Prerequisites
+- docker, docker-compose, NodeJs
+- https://www.asyncapi.com/docs/tools/cli/installation
+
+## Development and Test
+```shell
+make docker.up && \
+make celery.start && \
+make backend.start && \
+make backend test
+```
+
+<details>
+<summary style="font-size: 1.5rem; font-weight: bold;">
+Requirements document
+</summary>
 
 ## Вариант 1 - загрузка и обработка фоток
 >Разработать api-интерфейс для высоконагруженной загрузки изображений.

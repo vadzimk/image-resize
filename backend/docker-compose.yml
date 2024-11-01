@@ -12,6 +12,10 @@ x-mongo-replica-common: &mongo-replica-common
   environment: *mongo-environment
 
 services:
+#  reason for replica setup:
+  # The error you're encountering, pymongo.errors.OperationFailure:
+  # Transaction numbers are only allowed on a replica set member or mongos,
+  # indicates that you're trying to perform a transaction on a MongoDB instance that is not part of a replica set or sharded cluster (mongos).
   mongo-replica-setup:
     container_name: image-resize-mongo-setup
     image: mongo
