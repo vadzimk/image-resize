@@ -1,39 +1,30 @@
 import json
 import re
-import uuid
-from typing import Generator, List, Dict, Any
+from typing import Generator, Dict, Any, AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from odmantic import AIOEngine
-from odmantic.session import AIOSession
+from httpx import AsyncClient, ASGITransport
+from starlette.testclient import TestClient
 
-from src.db.session import create_db_client, create_db_engine
+from src.main import app
 
-from tests.api.utils import cleanup_project, upload_originals_s3, Subscription
-from src.models.data.data_model import Project
-
-
-@pytest_asyncio.fixture(loop_scope='function', scope="function", autouse=True)
-async def setup_teardown():
-    # setup code
-    print("\nGoing to setup")
-    print("Setup Done")
-    yield
-    # teardown code
-    print("\nGoing to teardwon")
-    await cleanup_project()
-    print("Teardwon Done")
+from tests.utils import cleanup_project, upload_originals_s3, Subscription
 
 
-@pytest_asyncio.fixture(loop_scope='function', scope="function")
+@pytest.fixture(scope='session')
+def test_client():
+    yield TestClient(app)
+
+
+@pytest.fixture(scope="session")
 async def expected_object_prefix() -> str:
     [object_prefix] = await upload_originals_s3(1)
     yield object_prefix
-    # await cleanup_project(object_prefix)
+    await cleanup_project(object_prefix)
 
 
-@pytest_asyncio.fixture(loop_scope='function', scope="function")
+@pytest.fixture(scope="session")
 async def missed_versions(expected_object_prefix):
     class VersionIterator:
         def __init__(self):
@@ -93,3 +84,21 @@ async def missed_versions(expected_object_prefix):
                     celery_versions.send(message)
         except StopIteration:  # All versions were created
             return versions_iter
+
+
+# @pytest_asyncio.fixture(loop_scope='function', scope="function", autouse=True)
+# async def setup_teardown():
+#     # setup code
+#     print("\nGoing to setup")
+#     print("Setup Done")
+#     yield
+#     # teardown code
+#     print("\nGoing to teardwon")
+#     await cleanup_project()
+#     print("Teardwon Done")
+
+
+@pytest_asyncio.fixture(loop_scope='function', scope='function')
+async def httpx_client() -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as async_client:
+        yield async_client

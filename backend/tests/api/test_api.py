@@ -7,18 +7,16 @@ from typing import Collection
 
 import httpx
 import pytest
-import pytest_asyncio
 import validators
 from httpx import Response
 from starlette.testclient import TestClient
 
-from src.main import app
-from .utils import is_image, cleanup_project, upload_originals_s3, Subscription
+from tests.utils import is_image, cleanup_project, upload_originals_s3, Subscription
 from ...src.models.request.request_model import ProjectCreatedSchema, GetProjectSchema, ImageVersion
 
 
 # @pytest.mark.only
-async def test_get_new_image_url_returns_upload_link(test_client):
+def test_get_new_image_url_returns_upload_link(test_client):
     """ endpoint post('/images') """
     image_file_path = "./tests/photo.jpeg"
     filename = os.path.basename(image_file_path)
@@ -30,7 +28,6 @@ async def test_get_new_image_url_returns_upload_link(test_client):
 # @pytest.mark.only
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestUploadOriginal:
-    @pytest.mark.asyncio(loop_scope='function')
     async def test_all_versions_are_created(self, missed_versions: Collection):
         assert len(missed_versions) == 0
 
@@ -39,24 +36,16 @@ class TestUploadOriginal:
 class TestGetProject:
     """ endpoint get('/projects/<object_prefix>') """
 
-    @pytest_asyncio.fixture(loop_scope='function', scope="function")
-    async def get_project_response(
-            self,
-            expected_object_prefix: str,
-            httpx_client,
-            # test_client: TestClient,
-            missed_versions  # is used to wait until the db updates state TODO
-    ) -> Response:
-        pass
-        # test_client = TestClient(app)
-
+    @pytest.fixture(scope="session")
+    async def get_project_response(self, expected_object_prefix: str, test_client: TestClient,
+                                   missed_versions) -> Response:
         # await asyncio.sleep(3)  # let the db update state -- uses missed_versions fixture instead
-        res = await httpx_client.get(f"/projects/{expected_object_prefix}")
+        res = test_client.get(f"/projects/{expected_object_prefix}")
         return res
 
     @pytest.mark.only
-    @pytest.mark.asyncio(loop_scope='function')
-    def test_returns_single_project_and_object_prefix_in_response(self, get_project_response: Response, expected_object_prefix: str):
+    def test_returns_single_project_and_object_prefix_in_response(self, get_project_response: Response,
+                                                                  expected_object_prefix: str):
         project_response = GetProjectSchema.model_validate_json(get_project_response.text)
         assert str(project_response.object_prefix) == expected_object_prefix
 
@@ -98,7 +87,7 @@ class TestGetProjectsReturnsListOfProjects:
     """ endpoint get('/projects') """
     number_of_projects_to_create = 11
 
-    @pytest_asyncio.fixture(loop_scope='class', scope="class", autouse=True)
+    @pytest.fixture(scope="class", autouse=True)
     async def act(self):
         await cleanup_project()  # make sure no previous projects are in db
         assert self.number_of_projects_to_create > 2
