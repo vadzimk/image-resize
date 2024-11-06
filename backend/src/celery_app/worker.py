@@ -13,7 +13,7 @@ from ..models.request.request_model import (TaskState,
 celery = Celery(__name__,
                 broker=server_settings.CELERY_BROKER_URL,
                 backend=server_settings.CELERY_RESULT_BACKEND,
-                include=["src.main", "src.settings", "src.repository.projects_uow"]  # other modules used by celery to include
+                include=["src.main", "src.settings", "src.unit_of_work.mongo_uow"]  # other modules used by celery to include
                 )
 
 

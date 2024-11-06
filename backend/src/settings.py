@@ -1,14 +1,17 @@
 import os
 from pathlib import Path
 
-from pydantic.v1 import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 print(Path(os.getcwd()))
 
 
 class ServerSettings(BaseSettings):
-    class Config:
-        env_file = Path(os.getcwd()) / ".env"
+    model_config = SettingsConfigDict(
+        env_file=Path(os.getcwd()) / ".env",
+        validate_default=False,  # skip validation of default fields
+        extra='ignore'  # ignore extra fields in the .env file
+    )
 
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
@@ -24,7 +27,7 @@ class ServerSettings(BaseSettings):
     MONGO_DATABASE_NAME: str
     MONGO_REPLICA_SET_NAME: str
 
-    task_notifications_queue = "task_notifications"  # also called routing_key or channel or event_type or event_name or topic or queue
+    task_notifications_queue: str = "task_notifications"  # also called routing_key or channel or event_type or event_name or topic or queue
 
 
 server_settings = ServerSettings()

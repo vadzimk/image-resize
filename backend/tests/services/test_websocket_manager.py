@@ -1,39 +1,15 @@
-import asyncio
 import uuid
 from typing import Tuple
-from unittest.mock import AsyncMock
 
-import pytest
 from fastapi.encoders import jsonable_encoder
-from starlette.testclient import TestClient
 from starlette.websockets import WebSocket
 
 from ...src.utils import validate_message
 from ...src.models.request.request_model import GetProjectSchema, TaskState
-from ...src.main import app
 from ...src.services.websocket_manager import WebsocketManager
 
 
-@pytest.fixture
-async def manager_and_ws_connected() -> Tuple[WebsocketManager, WebSocket]:
-    test_client = TestClient(app=app)
-    manager = WebsocketManager()
-    ws = test_client.websocket_connect("/ws")  # also can be used as context manager
-    ws.accept = AsyncMock()
-    ws.send_json = AsyncMock(side_effect=ws.send_json)
-    await manager.connect(ws)
 
-    yield manager, ws
-
-    ws.close()
-
-
-@pytest.fixture
-async def subscribed(manager_and_ws_connected) -> Tuple[WebsocketManager, WebSocket, uuid.UUID]:
-    manager, ws = manager_and_ws_connected
-    object_prefix = uuid.uuid4()
-    manager.subscribe(ws, object_prefix=object_prefix)
-    return manager, ws, object_prefix
 
 
 class TestConnection:

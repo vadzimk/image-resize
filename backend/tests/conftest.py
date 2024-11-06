@@ -1,103 +1,74 @@
-import json
-import re
+import os
 import uuid
-from typing import Generator, List
+from typing import List, AsyncGenerator
 
 import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from motor.motor_asyncio import AsyncIOMotorClient
+from odmantic import AIOEngine
+from odmantic.session import AIOSession
 from starlette.testclient import TestClient
 
-from .utils import cleanup_project, upload_originals_s3, Subscription
-from ..src.models.data.data_model import Project
-from ..src.main import app
+# from src.db.session import create_db_client, create_db_engine
+from src.main import app
+
+from tests.api.utils import cleanup_project
+from src.models.data.data_model import Project
+
+from dotenv import load_dotenv
 
 
-@pytest.fixture(scope="session")
-def test_client():
-    return TestClient(app)
+@pytest_asyncio.fixture(loop_scope='session', scope='session', autouse=True)
+def load_env():
+    load_dotenv()
 
 
-@pytest.fixture(scope="session", autouse=True)
-async def setup_teardown():
-    # setup code
-    print("\nGoing to setup")
-    print("Setup Done")
-    yield
-    # teardown code
-    print("\nGoing to teardwon")
-    await cleanup_project()
-    print("Teardwon Done")
+@pytest.fixture
+def mongo_engine() -> AIOEngine:
+    def create_db_client() -> AsyncIOMotorClient:
+        """Initialize and return a MongoDB client instance."""
+        return AsyncIOMotorClient(
+            host=os.getenv('MONGO_URL'),
+            username=os.getenv('MONGO_APP_USERNAME'),
+            password=os.getenv('MONGO_APP_PASSWORD'),
+            authSource=os.getenv('MONGO_DATABASE_NAME'),
+            replicaSet=os.getenv('MONGO_REPLICA_SET_NAME'),
+            uuidRepresentation="standard"
+        )
+
+    def create_db_engine(mongo_client: AsyncIOMotorClient) -> AIOEngine:
+        """Create an AIOEngine instance using the given MongoDB client."""
+        engine = AIOEngine(
+            client=mongo_client,
+            database=os.getenv('MONGO_DATABASE_NAME')
+        )
+        return engine
+
+    mongo_client = create_db_client()
+    return create_db_engine(mongo_client)
 
 
-@pytest.fixture(scope="session")
-async def expected_object_prefix() -> str:
-    [object_prefix] = await upload_originals_s3(1)
-    yield object_prefix
-    await cleanup_project(object_prefix)
+@pytest.fixture
+async def mongo_session(mongo_engine) -> AIOSession:
+    session = mongo_engine.session()
+    await session.start()
+    yield session
+    await session.end()
 
 
-@pytest.fixture(scope="session")
-async def missed_versions(expected_object_prefix):
-    class VersionIterator:
-        def __init__(self):
-            self._versions = ["big_thumb", "thumb", "big_1920",
-                              "d2500"]  # original was uploaded using pre-signed url
-            self._index = 0
-
-        def remove(self, s3object_key):
-            """ removes version that is mentioned in this s3object_key from the self._versions
-                pass if not found
-            """
-            for version in self._versions:
-                pattern = fr'_{version}(?=.*(?:[^.]*\.(?!.*\.))|$)'
-                if re.search(pattern, s3object_key):
-                    print("s3 created", version)
-                    self._versions.remove(version)
-
-        def __len__(self):
-            return len(self._versions)
-
-        def __iter__(self):
-            return iter(self._versions)
-
-        def __next__(self):
-            try:
-                item = self._versions[self._index]
-            except IndexError:
-                raise StopIteration()
-
-            self._index += 1
-            return item
-
-        def __repr__(self):
-            return str(self._versions)
-
-    def celery_event_iterator(versions) -> Generator:
-        while len(versions) > 0:
-            msg = (yield)
-            print("# receive celery event on progress")
-            if msg.get("state") == "PROGRESS":
-                assert msg.get("progress").get("done") == len(msg.get("versions").keys()) - 1
-            else:
-                assert msg.get("state") == "SUCCESS"
-            # verify all versions are created
-            for s3_key in msg.get("versions").values():
-                versions.remove(s3_key)
-
-    versions = VersionIterator()
-    async with Subscription(expected_object_prefix) as websocket:
-        try:
-            celery_versions = celery_event_iterator(versions)
-            next(celery_versions)
-            while True:
-                response = await websocket.recv()  # receive s3 event on object creation
-                message = json.loads(response)
-                if message.get("state") is not None:
-                    celery_versions.send(message)
-        except StopIteration:  # All versions were created
-            return versions
+@pytest_asyncio.fixture(loop_scope='function', scope='function')
+async def test_client():
+    yield TestClient(app)
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture(loop_scope='function', scope='function')
+async def httpx_client() -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as async_client:
+        yield async_client
+
+
+@pytest.fixture
 async def inserted_projects(request, mongo_session):
     try:
         number_of_projects = request.param

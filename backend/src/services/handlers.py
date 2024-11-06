@@ -7,7 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
 
-from ..repository.projects_uow import ProjectsUnitOfWork
+from ..api.dependencies import get_project_service
 from ..models.request.request_model import OnSubscribeSchema, SubscribeAction, ImageVersion, TaskState
 from ..utils import validate_message
 from ..exceptions import ClientError, ProjectNotFoundError
@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 async def update_project_in_db(object_prefix: uuid.UUID, update: dict):
     logger.debug(f"about to update_project_in_db: {type(object_prefix)} {object_prefix} | {type(update)} {update}")
     try:
-        async with ProjectsUnitOfWork() as uow:
-            updated = await uow.service.update_by_object_prefix(object_prefix, update)
-            await uow.commit()
+        async for project_service in get_project_service():
+            updated = await project_service.update_by_object_prefix(object_prefix, update)
             logger.debug(f"update_project_in_db: {updated.dict()}")
+
     except ProjectNotFoundError as e:
         logger.error(e)
 
@@ -73,11 +73,11 @@ async def update_project_handler(event: events.CeleryTaskUpdated | events.Origin
 async def update_failed_project_handler(event: events.CeleryTaskFailed):
     logger.debug(f"handling failed project event {event}")
     try:
-        async with ProjectsUnitOfWork() as uow:
-            [project, *_] = await uow.service.list_projects(filters={"celery_task_id": event.message.task_id})
-            updated = await uow.service.update_by_object_prefix(project.object_prefix, update=event.message.model_dump())
-            await uow.commit()
+        async for project_service in get_project_service():
+            [project, *_] = await project_service.list_projects(filters={"celery_task_id": event.message.task_id})
+            updated = await project_service.update_by_object_prefix(project.object_prefix, update=event.message.model_dump())
             logger.debug(f"update failed project in db {updated}")
+
     except Exception:
         logger.error(f"Unexpected error:\n{traceback.format_exc()}")
         raise

@@ -7,21 +7,18 @@ from typing import Collection
 
 import httpx
 import pytest
-from httpx import Response
+import pytest_asyncio
 import validators
+from httpx import Response
 from starlette.testclient import TestClient
 
-from ..utils import (Subscription,
-                     upload_originals_s3,
-                     cleanup_project,
-                     is_image
-                     )
-
-from ...src.models.request.request_model import GetProjectSchema, ImageVersion, ProjectCreatedSchema
+from src.main import app
+from .utils import is_image, cleanup_project, upload_originals_s3, Subscription
+from ...src.models.request.request_model import ProjectCreatedSchema, GetProjectSchema, ImageVersion
 
 
-# @pytest.mark.skip
-def test_get_new_image_url_returns_upload_link(test_client):
+# @pytest.mark.only
+async def test_get_new_image_url_returns_upload_link(test_client):
     """ endpoint post('/images') """
     image_file_path = "./tests/photo.jpeg"
     filename = os.path.basename(image_file_path)
@@ -30,9 +27,10 @@ def test_get_new_image_url_returns_upload_link(test_client):
     assert validators.url(project_created.upload_link, simple_host=True, may_have_port=True)
 
 
-# @pytest.mark.skip
+# @pytest.mark.only
 @pytest.mark.timeout(10)  # times out when versions are not removed
 class TestUploadOriginal:
+    @pytest.mark.asyncio(loop_scope='function')
     async def test_all_versions_are_created(self, missed_versions: Collection):
         assert len(missed_versions) == 0
 
@@ -41,20 +39,30 @@ class TestUploadOriginal:
 class TestGetProject:
     """ endpoint get('/projects/<object_prefix>') """
 
-    @pytest.fixture(scope="session")
-    async def res(self, expected_object_prefix: str, test_client: TestClient, missed_versions) -> Response:
+    @pytest_asyncio.fixture(loop_scope='function', scope="function")
+    async def get_project_response(
+            self,
+            expected_object_prefix: str,
+            httpx_client,
+            # test_client: TestClient,
+            missed_versions  # is used to wait until the db updates state TODO
+    ) -> Response:
+        pass
+        # test_client = TestClient(app)
+
         # await asyncio.sleep(3)  # let the db update state -- uses missed_versions fixture instead
-        res = test_client.get(f"/projects/{expected_object_prefix}")
+        res = await httpx_client.get(f"/projects/{expected_object_prefix}")
         return res
 
-    # @pytest.mark.skip
-    def test_returns_single_project_and_object_prefix_in_response(self, res: Response, expected_object_prefix: str):
-        project_response = GetProjectSchema.model_validate_json(res.text)
+    @pytest.mark.only
+    @pytest.mark.asyncio(loop_scope='function')
+    def test_returns_single_project_and_object_prefix_in_response(self, get_project_response: Response, expected_object_prefix: str):
+        project_response = GetProjectSchema.model_validate_json(get_project_response.text)
         assert str(project_response.object_prefix) == expected_object_prefix
 
     # @pytest.mark.skip
-    def test_object_prefix_in_versions_original(self, res: Response, expected_object_prefix: str):
-        project_response = GetProjectSchema.model_validate_json(res.text)
+    def test_object_prefix_in_versions_original(self, get_project_response: Response, expected_object_prefix: str):
+        project_response = GetProjectSchema.model_validate_json(get_project_response.text)
         print("project_response")
         pprint(project_response)
         response_versions_original = project_response.versions.get(ImageVersion.original)
@@ -63,7 +71,7 @@ class TestGetProject:
 
     # @pytest.mark.skip
     async def test_can_download_versions_using_versions_urls_and_each_downloaded_file_is_a_valid_image(self,
-                                                                                                       res: Response):
+                                                                                                       get_project_response: Response):
         async def url_saves_to_image(working_dir, url) -> bool:
             """
             download image from url save it in parent_dir and
@@ -78,7 +86,7 @@ class TestGetProject:
                     file.write(response.content)
                 return is_image(file_path)
 
-        project = res.json()
+        project = get_project_response.json()
         with tempfile.TemporaryDirectory() as temp_dir:
             tasks = [url_saves_to_image(temp_dir, s3_image_url) for s3_image_url in project.get("versions").values()]
             results = await asyncio.gather(*tasks)
@@ -90,12 +98,13 @@ class TestGetProjectsReturnsListOfProjects:
     """ endpoint get('/projects') """
     number_of_projects_to_create = 11
 
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest_asyncio.fixture(loop_scope='class', scope="class", autouse=True)
     async def act(self):
         await cleanup_project()  # make sure no previous projects are in db
         assert self.number_of_projects_to_create > 2
         await upload_originals_s3(self.number_of_projects_to_create)
         await asyncio.sleep(1)  # let db update state
+        yield
 
     def test_when_nothing_is_specified_then_returns_ten_first_projects(self, test_client):
         res = test_client.get(f"/projects").json()

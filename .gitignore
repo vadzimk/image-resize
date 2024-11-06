@@ -1,7 +1,2 @@
-.idea
-**/.env
-minio
 **/.pytest_cache
-**/__pycache__
-backend/schema_registry/docs
-backend/mongo/mongo-keyfile
+**/.idea

@@ -1,0 +1,95 @@
+import json
+import re
+import uuid
+from typing import Generator, List, Dict, Any
+
+import pytest
+import pytest_asyncio
+from odmantic import AIOEngine
+from odmantic.session import AIOSession
+
+from src.db.session import create_db_client, create_db_engine
+
+from tests.api.utils import cleanup_project, upload_originals_s3, Subscription
+from src.models.data.data_model import Project
+
+
+@pytest_asyncio.fixture(loop_scope='function', scope="function", autouse=True)
+async def setup_teardown():
+    # setup code
+    print("\nGoing to setup")
+    print("Setup Done")
+    yield
+    # teardown code
+    print("\nGoing to teardwon")
+    await cleanup_project()
+    print("Teardwon Done")
+
+
+@pytest_asyncio.fixture(loop_scope='function', scope="function")
+async def expected_object_prefix() -> str:
+    [object_prefix] = await upload_originals_s3(1)
+    yield object_prefix
+    # await cleanup_project(object_prefix)
+
+
+@pytest_asyncio.fixture(loop_scope='function', scope="function")
+async def missed_versions(expected_object_prefix):
+    class VersionIterator:
+        def __init__(self):
+            self._versions = ["big_thumb", "thumb", "big_1920",
+                              "d2500"]  # original was uploaded using pre-signed url
+            self._index = 0
+
+        def remove(self, s3object_key):
+            """ removes version that is mentioned in this s3object_key from the self._versions
+                pass if not found
+            """
+            for version in self._versions:
+                pattern = fr'_{version}(?=.*(?:[^.]*\.(?!.*\.))|$)'
+                if re.search(pattern, s3object_key):
+                    print("s3 created", version)
+                    self._versions.remove(version)
+
+        def __len__(self):
+            return len(self._versions)
+
+        def __iter__(self):
+            return iter(self._versions)
+
+        def __next__(self):
+            try:
+                item = self._versions[self._index]
+            except IndexError:
+                raise StopIteration()
+
+            self._index += 1
+            return item
+
+        def __repr__(self):
+            return str(self._versions)
+
+    def celery_event_generator(versions: VersionIterator) -> Generator[None, Dict[str, Any], None]:
+        while len(versions) > 0:
+            msg = (yield)  # Expects a dictionary message via `send`
+            print("# receive celery event on progress")
+            if msg.get("state") == "PROGRESS":
+                assert msg.get("progress").get("done") == len(msg.get("versions").keys()) - 1
+            else:
+                assert msg.get("state") == "SUCCESS"
+            # verify all versions are created
+            for s3_key in msg.get("versions").values():
+                versions.remove(s3_key)
+
+    versions_iter = VersionIterator()
+    async with Subscription(expected_object_prefix) as websocket:
+        try:
+            celery_versions = celery_event_generator(versions_iter)
+            next(celery_versions)
+            while True:
+                response = await websocket.recv()  # receive s3 event on object creation
+                message = json.loads(response)
+                if message.get("state") is not None:
+                    celery_versions.send(message)
+        except StopIteration:  # All versions were created
+            return versions_iter

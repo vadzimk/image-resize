@@ -16,6 +16,8 @@ flower = "*"
 pika = "*"
 motor = "*"
 pytest-asyncio = "*"
+odmantic = "*"
+pydantic-settings = "*"
 
 [dev-packages]
 

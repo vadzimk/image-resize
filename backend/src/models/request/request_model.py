@@ -1,13 +1,14 @@
 """
 Pydantic schemas or request model
 """
-import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Annotated, Optional, List
 
 from bson import ObjectId
 from pydantic import BaseModel, UUID4, Strict, PlainSerializer, ConfigDict
+
+from src.utils import compare_dataclasses
 
 UUID_str = Annotated[Annotated[UUID4, Strict(False)], PlainSerializer(lambda x: str(x), return_type=str)]
 ObjectId = Annotated[ObjectId, PlainSerializer(lambda x: str(x), return_type=str)]
@@ -50,6 +51,7 @@ class GetProjectsSchema(BaseModel):
     projects: List[GetProjectSchema]
 
 
+@compare_dataclasses
 @dataclass
 class ProgressDetail:
     done: int
@@ -66,6 +68,7 @@ class ProjectFailureSchema(BaseModel):
     error: str
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
 
 class SubscribeAction(str, Enum):
     SUBSCRIBE = "SUBSCRIBE"
