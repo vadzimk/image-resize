@@ -1,14 +1,11 @@
 import uuid
 from typing import Dict
-
 from odmantic import Model
 from pydantic import ConfigDict
-
-from ..domain.object_model import ProjectDOM
 from ..request.request_model import TaskState, ImageVersion, ProgressDetail
 
 
-class Project(Model, ProjectDOM):
+class Project(Model):
     pre_signed_url: str
     object_prefix: uuid.UUID  # previously, project_id
     state: TaskState | None = None
@@ -21,3 +18,8 @@ class Project(Model, ProjectDOM):
         collection="projects",
         # arbitrary_types_allowed=True,
     )
+
+    def __eq__(self, other):
+        if not isinstance(other, Project):
+            return False
+        return self.model_dump() == other.model_dump()

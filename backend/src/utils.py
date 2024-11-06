@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import asdict
 from functools import wraps
 from typing import Any, List, Union, Type
 
@@ -28,7 +29,6 @@ def timethis(func):
 
 
 def validate_message(message: Any, candidate_models: List[Type[BaseModel]]) -> Any:
-
     """ Validate message against candidate_models """
     union_type = candidate_models[0] if len(candidate_models) == 1 else Union[tuple(candidate_models)]
     type_adapter = TypeAdapter(union_type)
@@ -36,3 +36,16 @@ def validate_message(message: Any, candidate_models: List[Type[BaseModel]]) -> A
     return response_model
 
 
+def compare_dataclasses(cls):
+    """
+    Decorator function that adds __eq__ method to any dataclass,
+    which checks for dictionary comparison between two dataclasses instead of default object identity
+    """
+
+    def __eq__(self, other):
+        if not isinstance(other, cls):
+            return False
+        return asdict(self) == asdict(other)
+
+    cls.__eq__ = __eq__
+    return cls

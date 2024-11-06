@@ -1,22 +1,23 @@
 import asyncio
 import json
 import os
-from typing import Tuple, List
+from typing import Tuple, List, AsyncGenerator
 
 from dotenv import load_dotenv
+from httpx import AsyncClient, ASGITransport
 from minio.deleteobjects import DeleteObject
-from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.testclient import TestClient
-from websockets import connect
+from websockets import connect, WebSocketClientProtocol
 import httpx
 from PIL import Image
 
-from ..src.repository.projects_uow import create_db_client
-from ..src.settings import server_settings
-from .exceptions import FileUploadFailed
-from ..src.main import app
-from ..src.models.request.request_model import ProjectCreatedSchema
-from ..src.services.minio import s3
+from src.db.session import create_db_client
+# from ..src.unit_of_work.mongo_uow import create_db_client
+from src.settings import server_settings
+from tests.exceptions import FileUploadFailed
+from src.main import app
+from src.models.request.request_model import ProjectCreatedSchema
+from src.services.minio import s3
 
 load_dotenv()
 client = TestClient(app)
@@ -98,7 +99,7 @@ def s3_upload_link_put_file(image_file_path, upload_link):
 
 
 class Subscription:
-    """ Subscribes to websocket to listen to events of a object_prefix
+    """ Subscribes to websocket to listen for events of an object_prefix
     gets the subscription confirmation
     and returns websocket to receive subsequent events
     """
@@ -107,7 +108,7 @@ class Subscription:
         self.object_prefix = object_prefix
         self.websocket = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> WebSocketClientProtocol:
         self.websocket = await connect("ws://localhost:8000/ws")
         await self.websocket.send(json.dumps({"action": "SUBSCRIBE", "object_prefix": self.object_prefix}))
         res_confirmation = await self.websocket.recv()

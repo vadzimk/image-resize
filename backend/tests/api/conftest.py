@@ -1,19 +1,20 @@
 import json
 import re
-import uuid
-from typing import Generator, List
+from typing import Generator, Dict, Any, AsyncGenerator
 
 import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 from starlette.testclient import TestClient
 
-from ...src.main import app
-from ..utils import upload_originals_s3, cleanup_project, Subscription
+from src.main import app
+
+from tests.utils import cleanup_project, upload_originals_s3, Subscription
 
 
-
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def test_client():
-    return TestClient(app)
+    yield TestClient(app)
 
 
 @pytest.fixture(scope="session")
@@ -59,9 +60,9 @@ async def missed_versions(expected_object_prefix):
         def __repr__(self):
             return str(self._versions)
 
-    def celery_event_iterator(versions) -> Generator:
+    def celery_event_generator(versions: VersionIterator) -> Generator[None, Dict[str, Any], None]:
         while len(versions) > 0:
-            msg = (yield)
+            msg = (yield)  # Expects a dictionary message via `send`
             print("# receive celery event on progress")
             if msg.get("state") == "PROGRESS":
                 assert msg.get("progress").get("done") == len(msg.get("versions").keys()) - 1
@@ -71,10 +72,10 @@ async def missed_versions(expected_object_prefix):
             for s3_key in msg.get("versions").values():
                 versions.remove(s3_key)
 
-    versions = VersionIterator()
+    versions_iter = VersionIterator()
     async with Subscription(expected_object_prefix) as websocket:
         try:
-            celery_versions = celery_event_iterator(versions)
+            celery_versions = celery_event_generator(versions_iter)
             next(celery_versions)
             while True:
                 response = await websocket.recv()  # receive s3 event on object creation
@@ -82,4 +83,22 @@ async def missed_versions(expected_object_prefix):
                 if message.get("state") is not None:
                     celery_versions.send(message)
         except StopIteration:  # All versions were created
-            return versions
+            return versions_iter
+
+
+# @pytest_asyncio.fixture(loop_scope='function', scope="function", autouse=True)
+# async def setup_teardown():
+#     # setup code
+#     print("\nGoing to setup")
+#     print("Setup Done")
+#     yield
+#     # teardown code
+#     print("\nGoing to teardwon")
+#     await cleanup_project()
+#     print("Teardwon Done")
+
+
+@pytest_asyncio.fixture(loop_scope='function', scope='function')
+async def httpx_client() -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as async_client:
+        yield async_client
