@@ -1,5 +1,9 @@
+import ImageUpload from '../components/ImageUpload.tsx';
+
 export default function Home() {
     return (
-        <div>home</div>
+        <>
+            <ImageUpload/>
+        </>
     )
 }
