@@ -6,7 +6,8 @@ from typing import Callable, List
 
 from fastapi import FastAPI
 
-from .api.api import router
+from .api.api import router as http_router
+from .api.ws import router as ws_router
 from .settings import server_settings
 
 from .services.minio import s3
@@ -43,4 +44,5 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.include_router(router)
+app.include_router(http_router, prefix='/api')
+app.include_router(ws_router)

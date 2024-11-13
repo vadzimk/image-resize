@@ -11,7 +11,7 @@ import validators
 from httpx import Response
 from starlette.testclient import TestClient
 
-from tests.utils import is_image, cleanup_project, upload_originals_s3, Subscription
+from tests.utils import is_image, cleanup_project, upload_originals_s3, Subscription, BASE_URL
 from ...src.models.request.request_model import ProjectCreatedSchema, GetProjectSchema, ImageVersion
 
 
@@ -20,7 +20,7 @@ def test_get_new_image_url_returns_upload_link(test_client):
     """ endpoint post('/images') """
     image_file_path = "./tests/photo.jpeg"
     filename = os.path.basename(image_file_path)
-    res = test_client.post("/images", json={"filename": filename})
+    res = test_client.post(f"{BASE_URL}/images", json={"filename": filename})
     project_created = ProjectCreatedSchema.model_validate_json(res.text)
     assert validators.url(project_created.upload_link, simple_host=True, may_have_port=True)
 
@@ -40,7 +40,7 @@ class TestGetProject:
     async def get_project_response(self, expected_object_prefix: str, test_client: TestClient,
                                    missed_versions) -> Response:
         # await asyncio.sleep(3)  # let the db update state -- uses missed_versions fixture instead
-        res = test_client.get(f"/projects/{expected_object_prefix}")
+        res = test_client.get(f"{BASE_URL}/projects/{expected_object_prefix}")
         return res
 
     @pytest.mark.only
@@ -96,7 +96,7 @@ class TestGetProjectsReturnsListOfProjects:
         yield
 
     def test_when_nothing_is_specified_then_returns_ten_first_projects(self, test_client):
-        res = test_client.get(f"/projects").json()
+        res = test_client.get(f"{BASE_URL}/projects").json()
         projects = res.get("projects")
         assert len(projects) == 10
 
@@ -104,13 +104,13 @@ class TestGetProjectsReturnsListOfProjects:
         the_limit = 5
         the_skip = 9
         expected_left_after_skip = 2
-        res = test_client.get(f"/projects", params={"limit": the_limit, "skip": the_skip}).json()
+        res = test_client.get(f"{BASE_URL}/projects", params={"limit": the_limit, "skip": the_skip}).json()
         projects = res.get("projects")
         assert len(projects) == expected_left_after_skip
 
     def test_when_specified_limit_and_not_specified_skip_then_returns_projects_limited_by_limit(self, test_client):
         expected_limit = self.number_of_projects_to_create - 1 if self.number_of_projects_to_create < 10 else 5
-        res = test_client.get(f"/projects", params={"limit": expected_limit}).json()
+        res = test_client.get(f"{BASE_URL}/projects", params={"limit": expected_limit}).json()
         projects = res.get("projects")
         assert len(projects) == expected_limit
 
@@ -118,7 +118,7 @@ class TestGetProjectsReturnsListOfProjects:
             self, test_client):
         the_skip = 8
         expected_left_after_skip = 3
-        res = test_client.get(f"/projects", params={"skip": the_skip}).json()
+        res = test_client.get(f"{BASE_URL}/projects", params={"skip": the_skip}).json()
         projects = res.get("projects")
         assert len(projects) == expected_left_after_skip
 

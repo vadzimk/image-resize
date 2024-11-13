@@ -22,11 +22,12 @@ from src.services.minio import s3
 load_dotenv()
 client = TestClient(app)
 
+BASE_URL = '/api'
 
 def get_images_s3_upload_link_and_object_prefix(image_file_path) -> Tuple[str, str]:
     assert os.path.exists(image_file_path)
     filename = os.path.basename(image_file_path)
-    res = client.post("/images", json={"filename": filename})
+    res = client.post(f"{BASE_URL}/images", json={"filename": filename})
     print("res======>")
     print(res.json())
 

@@ -20,10 +20,6 @@ docker.downup: docker.down docker.up
 backend.test:
 	pipenv run python -m pytest -vv -s
 
-.PHONY: backend.test.unit
-backend.test.unit:
-	pipenv run python -m pytest tests/unit -vv -s
-
 .PHONY: backend.start
 backend.start:
 	uvicorn src.main:app --reload
