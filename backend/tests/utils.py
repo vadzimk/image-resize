@@ -95,7 +95,7 @@ async def cleanup_project(object_prefix: str | None = None):
 
 def s3_upload_link_put_file(image_file_path, upload_link):
     with open(image_file_path, 'rb') as file:
-        response = httpx.put(upload_link, content=file, headers={'Content-Type': 'application/json'})
+        response = httpx.put(upload_link, content=file, headers={'Content-Type': 'application/octet-stream'})
     return response
 
 
