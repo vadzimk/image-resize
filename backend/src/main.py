@@ -17,6 +17,9 @@ from .services.background_listeners import (
     listen_celery_task_notifications_queue)
 
 logging.basicConfig(level=logging.INFO)
+logging.getLogger('pymongo').setLevel(logging.INFO)
+logging.getLogger('pika').setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 logger.info(f"Minio: {'connected' if s3.bucket_exists(server_settings.MINIO_BUCKET_NAME) else 'NOT connected'}")
 

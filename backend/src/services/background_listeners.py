@@ -1,6 +1,8 @@
 import json
 import logging
 import traceback
+from pathlib import Path
+
 from minio import S3Error
 from asyncio import AbstractEventLoop
 
@@ -20,7 +22,8 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
         for record in event.get("Records", []):
             s3_object_key = record["s3"]["object"]["key"]
             logger.debug(f'listen_create_s3_events_to_upload_versions: {record["eventName"]}: {s3_object_key}')
-            if s3_object_key.rsplit(".")[0].endswith("_original"):
+            is_endswith_original = Path(s3_object_key).stem.endswith('_original')
+            if is_endswith_original:
                 logger.debug(f"listen_create_s3_events_to_upload_versions: found original {s3_object_key}")
                 original_object_key = s3_object_key
                 original_uploaded_event = OriginalUploaded(

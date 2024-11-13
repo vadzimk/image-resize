@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from minio import S3Error
@@ -22,9 +24,10 @@ celery_logger = get_task_logger(__name__)
 @shared_task
 @timethis
 def create_versions(object_name_original: str) -> ProjectProgressSchema:
-    object_prefix, basename = object_name_original.rsplit("/")
-    basename_wo_ext, ext = basename.rsplit(".")
-    input_file_name_less = basename_wo_ext.replace("_original", "")
+    object_prefix = str(Path(object_name_original).parent)
+    stem = Path(object_name_original).stem
+    suffix = Path(object_name_original).suffix
+    input_file_name_base = ''.join(stem.rsplit('_original', 1))  # replace last occurrence of _original with ''
     sizes = {
         ImageVersion.thumb: (150, 120),
         ImageVersion.big_thumb: (700, 700),
@@ -40,11 +43,11 @@ def create_versions(object_name_original: str) -> ProjectProgressSchema:
             temp_input_file.write(response.data)
             with tempfile.TemporaryDirectory() as temp_dir:
                 for index, (size_key, size_value) in enumerate(sizes.items()):
-                    destination_name = f"{input_file_name_less}_{size_key}.{ext}"
+                    destination_name = f"{input_file_name_base}_{size_key}{suffix}"
                     destination_temp_path = os.path.join(temp_dir, destination_name)
                     resize_with_aspect_ratio(temp_input_file, destination_temp_path,
                                              size_value)  # must use temporary file
-                    object_name = f"{object_prefix}/{input_file_name_less}_{size_key}.{ext}"
+                    object_name = f"{object_prefix}/{input_file_name_base}_{size_key}{suffix}"
                     s3.fput_object(bucket_name=server_settings.MINIO_BUCKET_NAME, object_name=object_name,
                                    file_path=destination_temp_path)
                     versions[size_key] = object_name
