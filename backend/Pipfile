@@ -18,6 +18,7 @@ motor = "*"
 pytest-asyncio = "*"
 odmantic = "*"
 pydantic-settings = "*"
+celery = "*"
 
 [dev-packages]
 validators = "*"
