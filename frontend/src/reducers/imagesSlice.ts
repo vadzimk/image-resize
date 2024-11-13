@@ -21,6 +21,10 @@ export interface FastApiError {
     detail: string
 }
 
+export interface UploadFileS3Args {
+    file: File,
+    upload_link: string,
+}
 
 const initialState: ImagesState = {}
 
@@ -48,6 +52,25 @@ export const getUploadLink = createAsyncThunk<ProjectCreatedSchema, CreateProjec
             thunkAPI.dispatch as AppDispatch,
             thunkAPI.rejectWithValue,
             "Could not request new upload url"
+        )
+    }
+)
+
+export const uploadFileS3 = createAsyncThunk<'', UploadFileS3Args>(
+    '/images/uploadS3',
+    async (args: UploadFileS3Args, thunkAPI) => {
+        return await fetchWithHandler(
+            args.upload_link,
+            {
+                method: 'PUT',
+                body: args.file,
+                headers: {
+                    "Content-Type": 'application/octet-stream'
+                },
+            },
+            thunkAPI.dispatch as AppDispatch,
+            thunkAPI.rejectWithValue,
+            'Could not upload file ' + args.file.name
         )
     }
 )

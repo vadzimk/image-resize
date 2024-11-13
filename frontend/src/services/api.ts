@@ -32,7 +32,14 @@ export async function fetchWithHandler<T>(
             console.error(errorData.detail)
             return rejectWithValue(errorData)
         }
-        return await res.json() as T
+
+        const contentType: string | null = res.headers.get('Content-Type')
+        if (contentType?.startsWith('application/json')) {
+            return await res.json() as T
+        } else {
+            // handle as text
+            return await res.text() as unknown
+        }
     } catch (e) {
         const err = e as Error
         console.error('An error occurred: ', err)

@@ -1,23 +1,38 @@
 import RoundPlus from './icons/RoundPlus.tsx';
 import React, {useRef, useState} from 'react';
 import {useAppDispatch} from '../hooks.ts';
-import {getUploadLink} from '../reducers/imagesSlice.ts';
+import {getUploadLink, uploadFileS3} from '../reducers/imagesSlice.ts';
+import {useNavigate} from 'react-router-dom';
 
 export default function ImageUpload() {
     const [isDragging, setIsDragging] = useState(false)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
     const dispatch = useAppDispatch() // ts setup requires typed dispatch
-
+    const navigate = useNavigate()
     const handleButtonClick = () => {
         fileInputRef.current?.click()
     }
 
+    const sendFile = async (file?: File) => {
+        if (!file) {
+            console.error('No file provided')
+            return
+        }
+        try {
+            const projectCreatedResponse = await dispatch(getUploadLink({filename: file.name})).unwrap()
+            // console.log("projectCreatedResponse", projectCreatedResponse)
+            await dispatch(uploadFileS3({file, upload_link: projectCreatedResponse.upload_link})).unwrap() // returns empty string if ok
+            // console.log('navigating to /progress')
+            navigate('/progress')
+        } catch {
+            /* empty */
+        }
+    }
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]
-        if (file) {
-            console.log('Selected', file.name)
-            await dispatch(getUploadLink({filename: file.name}))
-        }
+        // console.log('Selected', file?.name)
+        await sendFile(file)
     }
 
     const handleDragOver = (event: React.DragEvent<HTMLInputElement>) => {
@@ -33,10 +48,8 @@ export default function ImageUpload() {
         event.preventDefault()
         setIsDragging(false)
         const file = event.dataTransfer.files?.[0]
-        if (file) {
-            console.log('Dropped file', file.name)
-            await dispatch(getUploadLink({filename: file.name}))
-        }
+        // console.log('Dropped file', file?.name)
+        await sendFile(file)
     }
 
 
