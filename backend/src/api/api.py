@@ -17,14 +17,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def s3_object_names_to_urls(versions: dict) -> dict:
-    """ return new versions dict with s3 object names replaced by s3 get_urls """
-    result = versions.copy()
-    for key, value in result.items():
-        result[key] = get_presigned_url_get(value)
-    return result
-
-
 @router.post("/images", response_model=ProjectCreatedSchema, status_code=status.HTTP_201_CREATED)
 async def get_new_image_url(
         create_project: CreateProjectSchema,
@@ -51,7 +43,10 @@ async def get_project(
     return GetProjectSchema(
         object_prefix=project.object_prefix,
         state=project.state,
-        versions=s3_object_names_to_urls(project.versions)
+        versions={
+            key: get_presigned_url_get(value)
+            for key, value in project.versions.items()
+        }
     )
 
 
@@ -68,5 +63,8 @@ async def get_projects(
             GetProjectSchema(
                 object_prefix=proj.object_prefix,
                 state=proj.state,
-                versions=s3_object_names_to_urls(proj.versions)
+                versions={
+                    key: get_presigned_url_get(value)
+                    for key, value in proj.versions.items()
+                }
             ) for proj in projects])

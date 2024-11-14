@@ -4,6 +4,7 @@ from minio import Minio
 
 from ..settings import server_settings
 
+# https://min.io/docs/minio/linux/developers/python/API.html
 
 s3 = Minio(
     endpoint=server_settings.MINIO_HOSTNAME,
@@ -18,6 +19,9 @@ def make_bucket_if_not_exist(bucket_name: str):
         s3.make_bucket(bucket_name)
 
 
+make_bucket_if_not_exist(server_settings.MINIO_BUCKET_NAME)
+
+
 def get_presigned_url_put(object_name):
     url = s3.get_presigned_url(
         "PUT",
@@ -29,7 +33,7 @@ def get_presigned_url_put(object_name):
     return url
 
 
-def get_presigned_url_get(object_name:str):
+def get_presigned_url_get(object_name: str):
     response_headers = {
         "response-content-type": "application/octet-stream",
         "response-content-disposition": f'attachment; filename="{object_name.replace("/", "_")}"'
@@ -42,5 +46,3 @@ def get_presigned_url_get(object_name:str):
     )
     return url
 
-
-make_bucket_if_not_exist(server_settings.MINIO_BUCKET_NAME)

@@ -1,5 +1,4 @@
 import uuid
-
 import pytest
 
 from ...src.models.request.request_model import TaskState
@@ -71,11 +70,11 @@ class TestListProjects:
 
 async def test_can_update_project(mongo_session, inserted_projects):
     inserted_project: Project = inserted_projects[0]
-    print("inserted_project", inserted_project)
     projects_repository = ProjectRepository(mongo_session)
     patch = {"state": TaskState.REVOKED}
-    updated_project = await projects_repository.update({"object_prefix": inserted_project.object_prefix},
-                                                       patch)
-    print("updated_project", updated_project)
-    expected_project = inserted_project.model_copy(update=patch)
-    assert updated_project.model_dump() == expected_project.model_dump()
+    updated_project_in_db = await projects_repository.update(
+        {"object_prefix": inserted_project.object_prefix},
+        patch
+    )
+    expected_dict = {**inserted_project.model_dump(), **patch}
+    assert updated_project_in_db.model_dump() == expected_dict

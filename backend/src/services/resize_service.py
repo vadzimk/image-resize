@@ -1,3 +1,5 @@
+import time
+
 from PIL import Image
 from typing import Tuple, BinaryIO
 
@@ -9,6 +11,7 @@ def resize_with_aspect_ratio(image_source: str | BinaryIO, output_path: str, siz
     :param output_path: output image path
     :param size:  A 2-tuple, containing (width, height) in pixels.
     """
+    time.sleep(1)  # simulate long-running process
     with Image.open(image_source) as img:
         # Preserve aspect ratio
         img.thumbnail(size)

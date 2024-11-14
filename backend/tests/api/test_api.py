@@ -7,6 +7,7 @@ from typing import Collection
 
 import httpx
 import pytest
+import pytest_asyncio
 import validators
 from httpx import Response
 from starlette.testclient import TestClient
@@ -36,7 +37,7 @@ class TestUploadOriginal:
 class TestGetProject:
     """ endpoint get('/projects/<object_prefix>') """
 
-    @pytest.fixture(scope="session")
+    @pytest_asyncio.fixture(loop_scope='session', scope='session')
     async def get_project_response(self, expected_object_prefix: str, test_client: TestClient,
                                    missed_versions) -> Response:
         # await asyncio.sleep(3)  # let the db update state -- uses missed_versions fixture instead
@@ -87,7 +88,7 @@ class TestGetProjectsReturnsListOfProjects:
     """ endpoint get('/projects') """
     number_of_projects_to_create = 11
 
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest_asyncio.fixture(loop_scope='session', scope='class', autouse=True)
     async def act(self):
         await cleanup_project()  # make sure no previous projects are in db
         assert self.number_of_projects_to_create > 2

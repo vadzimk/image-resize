@@ -12,7 +12,6 @@ import httpx
 from PIL import Image
 
 from src.db.session import create_db_client
-# from ..src.unit_of_work.mongo_uow import create_db_client
 from src.settings import server_settings
 from tests.exceptions import FileUploadFailed
 from src.main import app
@@ -76,12 +75,15 @@ async def cleanup_mongodb(object_prefix: str | None = None):
     projects_database = session.client[server_settings.MONGO_DATABASE_NAME]
     projects_collection = projects_database["projects"]
     print("cleanup_mongodb:object_prefix:", object_prefix)
-    if object_prefix is not None:
-        await projects_collection.delete_one({"object_prefix": object_prefix})
-    else:
-        await projects_collection.delete_many({})  # delete all
-        assert await projects_collection.count_documents({}) == 0  # all documents deleted
-    await session.end_session()
+    try:
+        if object_prefix is not None:
+            await projects_collection.delete_one({"object_prefix": object_prefix})
+        else:
+            await projects_collection.delete_many({})  # delete all
+            assert await projects_collection.count_documents({}) == 0  # all documents deleted
+    finally:
+        await session.end_session()
+        mongo_client.close()
 
 
 async def cleanup_project(object_prefix: str | None = None):
