@@ -1,7 +1,7 @@
 import RoundPlus from './icons/RoundPlus.tsx';
 import React, {useRef, useState} from 'react';
 import {useAppDispatch} from '../hooks.ts';
-import {getUploadLink, uploadFileS3} from '../reducers/imagesSlice.ts';
+import {getUploadLink, uploadFileS3} from '../reducers/projectsSlice.ts';
 import {useNavigate} from 'react-router-dom';
 
 export default function ImageUpload() {

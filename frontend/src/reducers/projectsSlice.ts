@@ -1,11 +1,15 @@
 import {createAsyncThunk, createSlice, PayloadAction} from '@reduxjs/toolkit';
 import {fetchWithHandler} from '../services/api.ts';
 import {AppDispatch} from '../store.ts';
+import {ImageVersion, ProjectProgressSchema, TaskState} from '../types';
 
-export type ImagesState = {
-    filename?: string,
-    object_prefix?: string,
-    upload_link?: string,
+export interface FastApiError {
+    detail: string
+}
+
+export interface UploadFileS3Args {
+    file: File,
+    upload_link: string,
 }
 
 export interface CreateProjectSchema {
@@ -17,31 +21,39 @@ export interface ProjectCreatedSchema extends CreateProjectSchema {
     upload_link: string
 }
 
-export interface FastApiError {
-    detail: string
+interface GetProjectSchema {
+    object_prefix: string
+    state: TaskState
+    versions: Record<ImageVersion, string>
 }
 
-export interface UploadFileS3Args {
-    file: File,
-    upload_link: string,
-}
 
-const initialState: ImagesState = {}
+type ProjectState = Partial<GetProjectSchema & ProjectCreatedSchema> // combination of fields form both interfaces, making all fields optional
+
+const initialState: ProjectState[] = []
 
 
-export const imagesSlice = createSlice({
-    name: 'images',
+export const projectsSlice = createSlice({
+    name: 'projects',
     initialState,
-    reducers: {},
+    reducers: {
+        projectStateUpdated: function (state, action: PayloadAction<ProjectProgressSchema>) {
+            return state.map(item =>
+                item.object_prefix === action.payload.object_prefix ?
+                    {...item, ...action.payload} : item
+            )
+        }
+    },
     extraReducers: builder => {
         builder.addCase(getUploadLink.fulfilled, (state, action: PayloadAction<ProjectCreatedSchema>) => {
-            return {...state, ...action.payload}
+            const newProject = {...action.payload}
+            return [...state, newProject]
         })
     }
 })
 
 export const getUploadLink = createAsyncThunk<ProjectCreatedSchema, CreateProjectSchema, { rejectValue: FastApiError }>(
-    '/images/new',
+    '/projects/new',
     async (imageFileFields: CreateProjectSchema, thunkAPI) => {
         return await fetchWithHandler(
             '/api/images',
@@ -57,7 +69,7 @@ export const getUploadLink = createAsyncThunk<ProjectCreatedSchema, CreateProjec
 )
 
 export const uploadFileS3 = createAsyncThunk<'', UploadFileS3Args>(
-    '/images/uploadS3',
+    '/projects/uploadS3',
     async (args: UploadFileS3Args, thunkAPI) => {
         return await fetchWithHandler(
             args.upload_link,
@@ -75,5 +87,6 @@ export const uploadFileS3 = createAsyncThunk<'', UploadFileS3Args>(
     }
 )
 
+export const {projectStateUpdated} = projectsSlice.actions
 
-export default imagesSlice
+export default projectsSlice
