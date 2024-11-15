@@ -31,6 +31,9 @@ Processed image sizes:
   - [ ] Dockerfile and docker-compose for demo
   - [ ] Gitlab pipeline and deployment
 
+## Completed UI screenshots
+![UI](screenshots.png)
+
 <details>
 <summary>Basic Figma prototype for the app.</summary>
 <img src="img.png" alt="UI Image">
