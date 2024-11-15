@@ -1,5 +1,5 @@
 # Image resize app  
-[Option 1](https://gist.github.com/scr1pt/29284cc45f2ebb3978529c69115741be)  
+
 The app takes an image upload,
 does resizing in four particular formats  
 outputs processed images for download.
@@ -14,20 +14,19 @@ Processed image sizes:
 ## Work items
 
 - [x] Backend
-  - [x] Domain modelling
-  - [x] REST api implementation
+  - [x] model business Domain
+  - [x] implement REST api in FastApi
   - [x] WebSocket
-    - schema modelling
-      - models/request/ws_schema/asyncapi.yaml
-    - Websocket Manager implementation
-  - [x] Repository pattern
-  - [x] Unit of work pattern
-  - [x] Event Bus pattern
-  - [x] Celery background tasks implementation
-  - [x] Pytest unit and integration tests
-- [ ] Frontend
+    - [x] model websocket schema using asyncapi
+    - [x] implement Websocket Manager 
+  - [x] implement Repository pattern
+  - [x] implement Unit of work pattern
+  - [x] implement Event Bus pattern
+  - [x] implement Celery background tasks
+  - [x] implement Pytest unit and integration tests
+- [x] Frontend
   - [x] Figma prototype
-  - [ ] ReactJs implementation
+  - [x] implement ReactJS frontend
 - [ ] Demo
   - [ ] Dockerfile and docker-compose for demo
   - [ ] Gitlab pipeline and deployment
@@ -44,10 +43,13 @@ Processed image sizes:
 
 ## Development and Test
 ```shell
+cd backend && \
 make docker.up && \
 make celery.start && \
 make backend.start && \
 make backend.test
+cd ../fronedn && \
+npm run dev
 ```
 
 <details>
@@ -56,6 +58,9 @@ Requirements document
 </summary>
 
 ## Вариант 1 - загрузка и обработка фоток
+
+[Gist document](https://gist.github.com/scr1pt/29284cc45f2ebb3978529c69115741be)  
+
 >Разработать api-интерфейс для высоконагруженной загрузки изображений.
 
 Описание:
