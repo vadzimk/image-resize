@@ -6,6 +6,7 @@ from typing import List, Dict
 from fastapi.encoders import jsonable_encoder
 from starlette.websockets import WebSocket
 
+from .minio import get_presigned_url_get
 from ..utils import validate_message
 from ..models.request.request_model import ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema
 from ..exceptions import AlreadySubscribed, NotInSubscriptions
@@ -56,6 +57,8 @@ class WebsocketManager:
                     f"publish_celery_event:sub {message.object_prefix} {message.object_prefix == sub.object_prefix} {sub.object_prefix}")
                 if message.object_prefix == sub.object_prefix:
                     logger.debug(f"sending `{message}` to {conn} {type(conn)}")
+                    # replace s3 object path with pre-signed url
+                    message.versions = {key: get_presigned_url_get(value) for key, value in message.versions.items()}
                     await conn.send_json(
                         jsonable_encoder(
                             validate_message(message, [ProjectProgressSchema, GetProjectSchema, ProjectFailureSchema])
