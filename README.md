@@ -1,5 +1,6 @@
 # Image resize app  
 
+## App concept
 The app takes an image upload,
 does resizing in four particular formats  
 outputs processed images for download.
@@ -10,6 +11,17 @@ Processed image sizes:
 - big_thumb: 700x700, to_fit
 - big_1920, 1920x1080, to_fit
 - d2500: 2500x2500, to_fit
+
+<details>
+<summary>Basic Figma prototype for the app.</summary>
+<img src="wireframe.png" alt="UI Image">
+</details>
+
+
+## System design considerations
+- Repository pattern
+- Unit of work pattern
+- Event Bus pattern
 
 ## Work items
 
@@ -27,26 +39,41 @@ Processed image sizes:
 - [x] Frontend
   - [x] Figma prototype
   - [x] implement ReactJS frontend
-- [ ] Demo
-  - [ ] Dockerfile and docker-compose for demo
-  - [ ] Gitlab pipeline and deployment
+- [x] Demo
+  - [x] Dockerfile and docker-compose for demo
+
+## Start Demo
+
+```shell
+git clone https://gitlab.com/telei/image-resize.git;
+echo "127.0.0.1    minio.example.com" | sudo tee -a /etc/hosts;  # workaround for local minio nginx deployment: append its hostname to the hosts file
+cd image-resize;
+make demo.up
+```
+Serves frontend on ***localhost:80***
+
+## Finish Demo
+
+```shell
+make demo.clean
+```
 
 ## Completed UI screenshots
 ![UI](screenshots.png)
-
-<details>
-<summary>Basic Figma prototype for the app.</summary>
-<img src="img.png" alt="UI Image">
-</details>
+Files can be downloaded by clicking on their links
 
 
-## Prerequisites
+## Devalopment and Test
+### Prerequisites
 - docker, docker-compose, NodeJs
 - https://www.asyncapi.com/docs/tools/cli/installation
 
-## Development and Test
+### Create .env file
+- `backend/.env.dev` Copy form `backend/.env.dev.example`  
+  
 ```shell
 cd backend && \
+make mongo.keyfile && \
 make docker.up && \
 make celery.start && \
 make backend.start && \

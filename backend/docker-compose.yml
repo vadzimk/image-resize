@@ -17,7 +17,7 @@ services:
   # Transaction numbers are only allowed on a replica set member or mongos,
   # indicates that you're trying to perform a transaction on a MongoDB instance that is not part of a replica set or sharded cluster (mongos).
   mongo-replica-setup:
-    container_name: image-resize-mongo-setup
+    container_name: ${COMPOSE_PROJECT_NAME}_-mongo-setup  # COMPOSE_PROJECT_NAME provided by -p flag of docker-compose command
     image: mongo
     restart: on-failure
     volumes:
@@ -31,7 +31,7 @@ services:
 
   mongo1:
     <<: *mongo-replica-common
-    container_name: image-resize-mongo1
+    container_name: ${COMPOSE_PROJECT_NAME}_mongo1
     ports:
       - 30001:30001
     command: [ "-f", "/etc/mongod.conf", "--port", "30001", "--keyFile", "/etc/mongo-keyfile", "--replSet", "${MONGO_REPLICA_SET_NAME}", "--bind_ip_all" ]
@@ -48,7 +48,7 @@ services:
 
   mongo2:
     <<: *mongo-replica-common
-    container_name: image-resize-mongo2
+    container_name: ${COMPOSE_PROJECT_NAME}_mongo2
     ports:
       - 30002:30002
     command: [ "-f", "/etc/mongod.conf", "--port", "30002", "--keyFile", "/etc/mongo-keyfile", "--replSet", "${MONGO_REPLICA_SET_NAME}", "--bind_ip_all" ]
@@ -67,7 +67,7 @@ services:
 
   mongo3:
     <<: *mongo-replica-common
-    container_name: image-resize-mongo3
+    container_name: ${COMPOSE_PROJECT_NAME}_mongo3
     ports:
       - 30003:30003
     command: [ "-f", "/etc/mongod.conf", "--port", "30003", "--keyFile", "/etc/mongo-keyfile", "--replSet", "${MONGO_REPLICA_SET_NAME}", "--bind_ip_all" ]
@@ -86,7 +86,7 @@ services:
 
   minio:
     image: minio/minio
-    container_name: image-resize-minio # boto does not support underscores in host names
+    container_name: ${COMPOSE_PROJECT_NAME}_minio # boto does not support underscores in host names
     ports:
       - "9000:9000"
       - "9090:9090" # terminal
@@ -104,7 +104,7 @@ services:
 
   mc:
     image: minio/mc
-    container_name: image-resize-mc
+    container_name: ${COMPOSE_PROJECT_NAME}_mc
     depends_on:
       - minio
     environment:
@@ -119,7 +119,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    container_name: image-resize-rabbitmq
+    container_name: ${COMPOSE_PROJECT_NAME}_rabbitmq
     restart: unless-stopped
     ports:
       - "15672:15672"
@@ -129,55 +129,13 @@ services:
 
   redis:
     image: redis:7
-    container_name: image-resize-redis
+    container_name: ${COMPOSE_PROJECT_NAME}_redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     command: [ 'redis-server', '--appendonly', 'yes' ]
     volumes:
       - redis_data:/data
-
-#      #
-#      #        #  postgres:
-#      #        #    image: postgres
-#      #        #    restart: unless-stopped
-#      #        #    container_name: postgres_dev
-#      #        #    ports:
-#      #        #      - "5432:5432"
-#      #        #    env_file:
-#      #        #      - .env.dev.postgres
-#      #        #    volumes:
-#      #      #      - ./postgres-init-db.sh:/docker-entrypoint-initdb.d/postgres-init-db.sh
-#      #      #      - ./postgres_data_dev/:/var/lib/postgresql/data
-#
-#
-#    # TODO containerise celery worker and main app
-
-#      web:
-#        build: ./project
-#        ports:
-#          - 8004:8000
-#        command: uvicorn main:app --host 0.0.0.0 --reload
-#        volumes:
-#          - ./project:/usr/src/app
-#        environment:
-#          - CELERY_BROKER_URL=redis://redis:6379/0
-#          - CELERY_RESULT_BACKEND=redis://redis:6379/0
-#        depends_on:
-#          - redis
-#
-#      worker:
-#        build: ./project
-#        command: celery -A worker.celery worker --loglevel=info
-#        volumes:
-#          - ./project:/usr/src/app
-#        environment:
-#          - CELERY_BROKER_URL=redis://redis:6379/0
-#          - CELERY_RESULT_BACKEND=redis://redis:6379/0
-#        depends_on:
-#          - web
-#          - redis
-
 
 
 volumes:

@@ -62,8 +62,8 @@ export const getUploadLink = createAsyncThunk<ProjectCreatedSchema, CreateProjec
                 body: JSON.stringify(imageFileFields)
             },
             thunkAPI.dispatch as AppDispatch,
-            thunkAPI.rejectWithValue,
-            "Could not request new upload url"
+            // thunkAPI.rejectWithValue,
+            // "Could not request new upload url"
         )
     }
 )
@@ -81,8 +81,8 @@ export const uploadFileS3 = createAsyncThunk<'', UploadFileS3Args>(
                 },
             },
             thunkAPI.dispatch as AppDispatch,
-            thunkAPI.rejectWithValue,
-            'Could not upload file ' + args.file.name
+            // thunkAPI.rejectWithValue,
+            // 'Could not upload file ' + args.file.name
         )
     }
 )

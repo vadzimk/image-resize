@@ -1,5 +1,6 @@
 **/.idea
 **/.env
+**/.env.dev
 minio
 **/.pytest_cache
 **/__pycache__

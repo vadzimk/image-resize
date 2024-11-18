@@ -63,7 +63,7 @@ async def unsubscribe_handler(cmd: commands.Subscribe):
 
 async def update_project_handler(event: events.CeleryTaskUpdated | events.OriginalUploaded):
     update = event.message.model_dump()
-    logger.debug(f"update_project:update: {update}")
+    logger.debug(f"update: {update}")
     await update_project_in_db(
         object_prefix=event.message.object_prefix,
         update=update
@@ -84,7 +84,7 @@ async def update_failed_project_handler(event: events.CeleryTaskFailed):
 
 
 async def notify_subscribers_handler(event: events.CeleryTaskUpdated | events.CeleryTaskFailed):
-    logger.debug(f"handler:notify_subscribers:event: {event}")
+    logger.debug(f"event: {event}")
     await ws_manager.publish_celery_event(event.message)
 
 

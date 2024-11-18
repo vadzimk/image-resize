@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 fastapi = "*"
-uvicorn = "*"
 minio = "*"
 python-multipart = "*"
 pillow = "*"
@@ -19,6 +18,7 @@ pytest-asyncio = "*"
 odmantic = "*"
 pydantic-settings = "*"
 celery = "*"
+uvicorn = {extras = ["standard"], version = "*"}
 
 [dev-packages]
 validators = "*"

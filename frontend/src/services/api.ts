@@ -1,6 +1,6 @@
 // import {NotificationType, notify} from '../reducers/notificationSlice.ts';
-import {UserState} from '../reducers/types';
-import {AppDispatch, RootState} from '../store.ts';
+// import {UserState} from '../reducers/types';
+// import {AppDispatch, RootState} from '../store.ts';
 
 
 export interface FastApiError {
@@ -10,9 +10,9 @@ export interface FastApiError {
 export async function fetchWithHandler<T>(
     url: string,
     options: RequestInit,
-    dispatch: AppDispatch,
+    // dispatch: AppDispatch,
     rejectWithValue: (value: FastApiError) => any,
-    errorMessage: string
+    // errorMessage: string
 ): Promise<T | ReturnType<typeof rejectWithValue>> {
     const isFormData = options.body instanceof FormData
     try {

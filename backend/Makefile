@@ -1,20 +1,18 @@
 SHELL := /bin/bash
 
 .PHONY: docker.up
-docker.up: mongo.make.keyfile
+docker.up: mongo.keyfile
 	set -o allexport \
-	&& source .env \
+	&& source .env.dev \
 	&& set +o allexport \
-	&& docker-compose up -d
+	&& docker-compose -p image-resize-dev up -d
 
 .PHONY: docker.down
 docker.down:
-	docker-compose down -v
-
+	docker-compose -p image-resize-dev down
 
 .PHONY: docker.downup
 docker.downup: docker.down docker.up
-
 
 .PHONY: backend.test
 backend.test:
@@ -26,7 +24,7 @@ backend.start:
 
 .PHONY: celery.start
 celery.start:
-	celery -A src.celery_app.worker.celery worker --loglevel=info
+	celery -A src.celery_app.worker.celery worker
 
 .PHONY: celery.flower
 celery.flower:
@@ -45,8 +43,8 @@ asyncapi.generate:
 	&& asyncapi generate fromTemplate asyncapi.yaml @asyncapi/html-template -o ./docs -i --debug
 
 
-.PHONY: mongo.make.keyfile
-mongo.make.keyfile:
+.PHONY: mongo.keyfile
+mongo.keyfile:
 	@cd mongo && \
 	if [ ! -f mongo-keyfile ]; then \
 		openssl rand -base64 756 > mongo-keyfile; \
@@ -54,3 +52,7 @@ mongo.make.keyfile:
 	else \
 		echo "mongo-keyfile exists, skipped creation"; \
 	fi
+
+.PHONY: backend.build
+backend.build:
+	docker build -t image_resize:latest .

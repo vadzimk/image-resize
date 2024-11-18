@@ -21,10 +21,10 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
     def handle_s3_event(event: dict):
         for record in event.get("Records", []):
             s3_object_key = record["s3"]["object"]["key"]
-            logger.debug(f'listen_create_s3_events_to_upload_versions: {record["eventName"]}: {s3_object_key}')
+            logger.debug(f'Event: {record["eventName"]}, object_key: {s3_object_key}')
             is_endswith_original = Path(s3_object_key).stem.endswith('_original')
             if is_endswith_original:
-                logger.debug(f"listen_create_s3_events_to_upload_versions: found original {s3_object_key}")
+                logger.debug(f"Found original object_key: {s3_object_key}")
                 original_object_key = s3_object_key
                 original_uploaded_event = OriginalUploaded(
                     message=GetProjectSchema(
@@ -37,7 +37,7 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
     try:
         # create file versions when original is uploaded
         with s3.listen_bucket_notification(bucket_name=server_settings.MINIO_BUCKET_NAME, events=["s3:ObjectCreated:*"]) as events:
-            logger.debug("ENTERED listen_create_s3_events_and_update_db_and_start_celery_tasks")
+            logger.debug("About to handle s3 events")
             for event in events:
                 handle_s3_event(event)
 
@@ -52,11 +52,11 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
     """ publishes celery event to websocket manager and
         updates project in database
     """
-    logger.debug(f"Entered listen_celery_task_notifications_queue_to_publish")
+    logger.debug(f"Entered")
 
     def celery_event_callback(ch, method, properties, body):
         try:
-            logger.debug(f"Entered listen_celery_task_notifications_queue:celery_event_callback:body: {body}")
+            logger.debug(f"args: body: {body}")
             message = validate_message(json.loads(body), [ProjectProgressSchema, ProjectFailureSchema])
             logger.debug(f"message = {message}")
             bus.handle(CeleryTaskUpdated(message=message))
@@ -67,7 +67,7 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
 
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         logger.debug(
-            f"listen_celery_task_notifications_queue_to_publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
+            f"To publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
         rabbitmq_channel.basic_consume(queue=server_settings.task_notifications_queue, on_message_callback=celery_event_callback, auto_ack=True)
         rabbitmq_channel.start_consuming()  # starts loop
 

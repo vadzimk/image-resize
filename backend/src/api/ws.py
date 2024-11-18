@@ -28,13 +28,13 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            logger.info(f"Path/ws Client message {data}")
+            logger.info(f"/ws Client message {data}")
             message: dict = json.loads(data)
             bus.handle(make_command(message, websocket))
     except WebSocketDisconnect:
         logger.info("Client disconnected")
     except Exception:
-        logger.error(f"websocket_endpoint: error:\n{traceback.format_exc()}")
+        logger.error(traceback.format_exc())
     finally:
         ws_manager.disconnect(websocket)
 

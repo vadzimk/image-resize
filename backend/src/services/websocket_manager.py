@@ -35,12 +35,12 @@ class WebsocketManager:
     def subscribe(self, websocket: WebSocket, object_prefix: uuid.UUID):
         if not isinstance(object_prefix, uuid.UUID):
             raise Exception(f"object_prefix must be of type UUID but got {type(object_prefix)}")
-        logger.debug(f"WebsocketManager.subscribe: {websocket}, {object_prefix}")
+        logger.debug(f"websocket: {websocket}, object_prefix: {object_prefix}")
         if next((s for s in self.connection_subscriptions[websocket] if s.object_prefix == object_prefix),
                 None) is not None:
             raise AlreadySubscribed()
         self.connection_subscriptions[websocket].append(Subscription(object_prefix=object_prefix))
-        logger.debug(f"self.connection_subscriptions {self.connection_subscriptions}")
+        logger.debug(f"connection_subscriptions: {self.connection_subscriptions}")
 
     def unsubscribe(self, websocket: WebSocket, object_prefix: uuid.UUID):
         if next((d for d in self.connection_subscriptions[websocket] if d.object_prefix == object_prefix),
@@ -50,13 +50,13 @@ class WebsocketManager:
                                                     s.object_prefix != object_prefix]
 
     async def publish_celery_event(self, message: ProjectProgressSchema | GetProjectSchema | ProjectFailureSchema):
-        logger.debug(f"publish_celery_event: message {message} {type(message)}")
+        logger.debug(f"message: {message}, message type: {type(message)}")
         for conn, subscriptions in self.connection_subscriptions.items():
             for sub in subscriptions:
                 logger.debug(
-                    f"publish_celery_event:sub {message.object_prefix} {message.object_prefix == sub.object_prefix} {sub.object_prefix}")
+                    f"message.object_prefix: {message.object_prefix}, is match: {message.object_prefix == sub.object_prefix}, sub.object_prefix: {sub.object_prefix}")
                 if message.object_prefix == sub.object_prefix:
-                    logger.debug(f"sending `{message}` to {conn} {type(conn)}")
+                    logger.debug(f"Sending message: `{message}` to {conn} {type(conn)}")
                     # replace s3 object path with pre-signed url
                     message.versions = {key: get_presigned_url_get(value) for key, value in message.versions.items()}
                     await conn.send_json(

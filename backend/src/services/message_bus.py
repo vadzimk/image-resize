@@ -45,7 +45,7 @@ class MessageBus:
             raise
 
     def handle(self, message: Message):
-        logger.debug(f"bus:handle:message: {message}")
+        logger.debug(f"message: {message}")
         self.queue.append(message)
         while self.queue:
             cur_message = self.queue.pop(0)

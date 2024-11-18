@@ -1,14 +1,16 @@
 import os
-from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-print(Path(os.getcwd()))
+
+env = os.getenv('ENV', 'dev')
+env_file = f'.env.{env}'
+load_dotenv(env_file)
 
 
 class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=Path(os.getcwd()) / ".env",
         validate_default=False,  # skip validation of default fields
         extra='ignore'  # ignore extra fields in the .env file
     )
@@ -18,7 +20,7 @@ class ServerSettings(BaseSettings):
 
     MINIO_ROOT_USER: str
     MINIO_ROOT_PASSWORD: str
-    MINIO_HOSTNAME: str
+    MINIO_URL: str
     MINIO_BUCKET_NAME: str
 
     MONGO_APP_USERNAME: str

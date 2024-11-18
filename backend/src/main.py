@@ -15,8 +15,10 @@ from .services.message_bus import bus
 from .services.background_listeners import (
     listen_create_s3_events_and_update_db_and_start_celery_tasks,
     listen_celery_task_notifications_queue)
+from .utils import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging(logging.INFO, logger=logging.getLogger())
+
 logging.getLogger('pymongo').setLevel(logging.INFO)
 logging.getLogger('pika').setLevel(logging.INFO)
 

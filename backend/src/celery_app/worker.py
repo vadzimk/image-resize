@@ -1,3 +1,5 @@
+import logging
+
 from celery import Celery
 from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
@@ -6,14 +8,19 @@ from .utils import notify_client
 from ..settings import server_settings
 
 from ..models.request.request_model import (TaskState,
-                                          ProjectProgressSchema,
+                                            ProjectProgressSchema,
 
-                                          ProjectFailureSchema)
+                                            ProjectFailureSchema)
+from ..utils import setup_logging
 
 celery = Celery(__name__,
                 broker=server_settings.CELERY_BROKER_URL,
                 backend=server_settings.CELERY_RESULT_BACKEND,
-                include=["src.main", "src.settings", "src.unit_of_work.mongo_uow"]  # other modules used by celery to include
+                include=["src.main",
+                         "src.settings",
+                         "src.unit_of_work.mongo_uow",
+                         "src.utils"
+                         ]  # other modules used by celery to include
                 )
 
 
@@ -32,6 +39,8 @@ class CeleryConfig:
 celery.config_from_object(CeleryConfig)
 celery.set_default()  # to use shared_task
 celery_logger = get_task_logger(__name__)
+
+setup_logging(logging.DEBUG, logger=celery_logger)
 
 
 @task_postrun.connect

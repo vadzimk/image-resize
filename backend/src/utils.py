@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 from dataclasses import asdict
 from functools import wraps
@@ -49,3 +50,13 @@ def compare_dataclasses(cls):
 
     cls.__eq__ = __eq__
     return cls
+
+
+def setup_logging(loglevel, logger=logging.getLogger()):
+    FORMAT = "%(asctime)s | %(levelname)s | [%(name)s] | (%(filename)s:%(lineno)d) | %(funcName)s: %(message)s"
+    formatter = logging.Formatter(FORMAT, datefmt="%Y-%m-%dT%H:%M:%S")
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(loglevel)
+

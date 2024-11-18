@@ -31,11 +31,11 @@ class ProjectService:
                           pre_signed_url=pre_signed_url)
         project: Project = await self._project_repository.add(project)
         await self._uow.commit()
-        logger.debug(f"projectService:project {project}")
+        logger.debug(f"project {project}")
         return ProjectDOM(**project.model_dump())
 
     async def update_by_object_prefix(self, object_prefix: uuid.UUID, update: dict) -> ProjectDOM:
-        logger.debug(f"update_by_object_prefix:object_prefix type: {type(object_prefix)}")
+        logger.debug(f"object_prefix type: {type(object_prefix)}")
         if not isinstance(object_prefix, uuid.UUID):
             raise Exception(f"object_prefix must be type UUID but got {type(object_prefix)}")
 
