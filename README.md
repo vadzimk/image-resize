@@ -1,5 +1,5 @@
 # Image resize app  
-
+### [Link to Start demo](#start-demo)
 ## App concept
 The app takes an image upload,
 does resizing in four particular formats  
