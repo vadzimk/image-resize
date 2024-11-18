@@ -82,6 +82,10 @@ cd ../fronedn && \
 npm run dev
 ```
 
+## Deployment diagram
+![DD](Diagram.svg)
+
+
 <details>
 <summary style="font-size: 1.5rem; font-weight: bold;">
 Requirements document
