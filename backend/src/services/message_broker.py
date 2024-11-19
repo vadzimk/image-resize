@@ -1,9 +1,9 @@
 # Rabbitmq message broker
 import logging
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 import pika
-
 from ..settings import server_settings
+from redis.asyncio import Redis
 
 logger = logging.getLogger(__name__)
 
@@ -22,3 +22,13 @@ def rabbitmq_channel_connection():
             rabbitmq_channel.close()
         if "rabbitmq_connection" in locals() and rabbitmq_connection.is_open:
             rabbitmq_connection.close()
+
+
+@asynccontextmanager
+async def redis_connection():
+    redis_client = Redis.from_url(server_settings.CELERY_RESULT_BACKEND)
+    yield redis_client
+    await redis_client.aclose()
+
+
+redis_client = Redis.from_url(server_settings.CELERY_RESULT_BACKEND)

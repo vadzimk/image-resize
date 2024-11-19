@@ -36,7 +36,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception:
         logger.error(traceback.format_exc())
     finally:
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect(websocket)
 
 
 def make_command(message: dict, websocket: WebSocket) -> commands.Command:

@@ -1,7 +1,7 @@
 import logging
 import traceback
 import uuid
-from typing import Dict, Type, List, Callable
+from typing import Dict, Type, List, Callable, Awaitable
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
@@ -30,10 +30,11 @@ async def update_project_in_db(object_prefix: uuid.UUID, update: dict):
         logger.error(e)
 
 
-async def handle_ws_confirmation(action: Callable, initial_payload: dir, schema: Type[BaseModel], ws: WebSocket):
+async def handle_ws_confirmation(action: Callable[[], Awaitable[None]], initial_payload: dir, schema: Type[BaseModel],
+                                 ws: WebSocket):
     initial_payload.update({"status_code": 200, "status": "OK"})
     try:
-        action()
+        await action()
     except ClientError as err:
         initial_payload.update({"status_code": 400, "status": "Error", "message": str(err)})
     except Exception:
@@ -46,16 +47,24 @@ async def handle_ws_confirmation(action: Callable, initial_payload: dir, schema:
 
 
 async def subscribe_handler(cmd: commands.Subscribe):
+
+    async def subscribe_action() -> None:
+        await ws_manager.subscribe(cmd.websocket, cmd.object_prefix)
+
     await handle_ws_confirmation(
-        action=lambda: ws_manager.subscribe(cmd.websocket, cmd.object_prefix),
+        action=subscribe_action,
         initial_payload={"action": SubscribeAction.SUBSCRIBE, "object_prefix": cmd.object_prefix},
         schema=OnSubscribeSchema,
         ws=cmd.websocket)
 
 
 async def unsubscribe_handler(cmd: commands.Subscribe):
+
+    async def unsubscribe_action() -> None:
+        await ws_manager.unsubscribe(cmd.websocket, cmd.object_prefix)
+
     await handle_ws_confirmation(
-        action=lambda: ws_manager.unsubscribe(cmd.websocket, cmd.object_prefix),
+        action=unsubscribe_action,
         initial_payload={"action": SubscribeAction.UNSUBSCRIBE, "object_prefix": cmd.object_prefix},
         schema=OnSubscribeSchema,
         ws=cmd.websocket)
@@ -75,7 +84,8 @@ async def update_failed_project_handler(event: events.CeleryTaskFailed):
     try:
         async for project_service in get_project_service():
             [project, *_] = await project_service.list_projects(filters={"celery_task_id": event.message.task_id})
-            updated = await project_service.update_by_object_prefix(project.object_prefix, update=event.message.model_dump())
+            updated = await project_service.update_by_object_prefix(project.object_prefix,
+                                                                    update=event.message.model_dump())
             logger.debug(f"update failed project in db {updated}")
 
     except Exception:

@@ -11,7 +11,8 @@ from ..settings import server_settings
 from ..utils import validate_message
 from ..services.message_bus import bus
 from ..models.domain.events import CeleryTaskUpdated, OriginalUploaded
-from ..models.request.request_model import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, ProjectFailureSchema
+from ..models.request.request_model import TaskState, ProjectProgressSchema, GetProjectSchema, ImageVersion, \
+    ProjectFailureSchema
 from ..services.minio import s3
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ def listen_create_s3_events_and_update_db_and_start_celery_tasks(loop: AbstractE
 
     try:
         # create file versions when original is uploaded
-        with s3.listen_bucket_notification(bucket_name=server_settings.MINIO_BUCKET_NAME, events=["s3:ObjectCreated:*"]) as events:
+        with s3.listen_bucket_notification(bucket_name=server_settings.MINIO_BUCKET_NAME,
+                                           events=["s3:ObjectCreated:*"]) as events:
             logger.debug("About to handle s3 events")
             for event in events:
                 handle_s3_event(event)
@@ -68,6 +70,6 @@ def listen_celery_task_notifications_queue(loop: AbstractEventLoop):
     with rabbitmq_channel_connection() as (rabbitmq_channel, rabbitmq_connection):
         logger.debug(
             f"To publish: rabbitmq_channel: {rabbitmq_channel is not None}; rabbitmq_connection: {rabbitmq_connection is not None}")
-        rabbitmq_channel.basic_consume(queue=server_settings.task_notifications_queue, on_message_callback=celery_event_callback, auto_ack=True)
+        rabbitmq_channel.basic_consume(queue=server_settings.task_notifications_queue,
+                                       on_message_callback=celery_event_callback, auto_ack=True)
         rabbitmq_channel.start_consuming()  # starts loop
-
